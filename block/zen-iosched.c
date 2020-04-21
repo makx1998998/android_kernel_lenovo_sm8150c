@@ -48,7 +48,7 @@ zen_merged_requests(struct request_queue *q, struct request *req,
 	 * and move into next position (next will be deleted) in fifo
 	 */
 	if (!list_empty(&req->queuelist) && !list_empty(&next->queuelist)) {
-		if (time_before(next->fifo_time, req->fifo_time)) {
+		if (time_before((unsigned long)next->fifo_time, (unsigned long)req->fifo_time)) {
 			list_move(&req->queuelist, &next->queuelist);
 			req->fifo_time = next->fifo_time;
 		}
