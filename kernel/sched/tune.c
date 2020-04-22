@@ -14,9 +14,6 @@
 bool schedtune_initialized = false;
 extern struct reciprocal_value schedtune_spc_rdiv;
 
-/* We hold schedtune boost in effect for at least this long */
-#define SCHEDTUNE_BOOST_HOLD_NS 50000000ULL
-
 /*
  * EAS scheduler tunables for task groups.
  */
