@@ -17,8 +17,9 @@
 #include <trace/events/power.h>
 #include <linux/sched/sysctl.h>
 #include <linux/state_notifier.h>
-#include "sched.h"
 #include "tune.h"
+#include <uapi/linux/sched/types.h>
+#include "sched.h"
 
 #define RATE_LIMIT				0
 
@@ -209,7 +210,10 @@ static void smugov_update_commit(struct smugov_policy *sg_policy, u64 time,
  */
 static unsigned int get_next_freq(struct smugov_policy *sg_policy,
 				  unsigned long util, unsigned long max)
-{	
+{
+
+
+	bool state_suspended;	
 	struct cpufreq_policy *policy = sg_policy->policy;
 	struct smugov_tunables *tunables = sg_policy->tunables;
 	unsigned int freq = arch_scale_freq_invariant() ?
