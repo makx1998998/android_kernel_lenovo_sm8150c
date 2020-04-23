@@ -2382,6 +2382,7 @@ static const struct attribute_group *a6xx_coresight_groups_cx[] = {
 	NULL,
 };
 
+#if 0
 static struct adreno_coresight a6xx_coresight = {
 	.registers = a6xx_coresight_regs,
 	.count = ARRAY_SIZE(a6xx_coresight_regs),
