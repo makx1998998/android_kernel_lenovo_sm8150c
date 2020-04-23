@@ -98,3 +98,4 @@ static inline bool blk_mq_sched_needs_restart(struct blk_mq_hw_ctx *hctx)
 }
 
 #endif
+

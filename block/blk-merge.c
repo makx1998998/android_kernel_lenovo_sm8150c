@@ -862,3 +862,4 @@ enum elv_merge blk_try_merge(struct request *rq, struct bio *bio)
 	}
 	return ELEVATOR_NO_MERGE;
 }
+
