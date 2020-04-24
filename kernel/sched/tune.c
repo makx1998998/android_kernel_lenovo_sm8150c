@@ -16,7 +16,7 @@ bool schedtune_initialized = false;
 extern struct reciprocal_value schedtune_spc_rdiv;
 
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
-#define DYNAMIC_BOOST_SLOTS_COUNT 5
+#define DYNAMIC_BOOST_SLOTS_COUNT 8
 static DEFINE_MUTEX(boost_slot_mutex);
 static DEFINE_MUTEX(stune_boost_mutex);
 static struct schedtune *getSchedtune(char *st_name);
@@ -261,7 +261,7 @@ schedtune_cpu_update(int cpu)
 
 	/* The root boost group is always active */
 	boost_max = bg->group[0].boost;
-	for (idx = 1; idx < BOOSTGROUPS_COUNT; ++idx) {
+	for (idx = 0; idx < BOOSTGROUPS_COUNT; ++idx) {
 		/*
 		 * A boost group affects a CPU only if it has
 		 * RUNNABLE tasks on that CPU
@@ -841,7 +841,7 @@ static struct schedtune *getSchedtune(char *st_name)
 {
 	int idx;
 
-	for (idx = 1; idx < BOOSTGROUPS_COUNT; ++idx) {
+	for (idx = 0; idx < BOOSTGROUPS_COUNT; ++idx) {
 		char name_buf[NAME_MAX + 1];
 		struct schedtune *st = allocated_group[idx];
 
