@@ -33,4 +33,3 @@ void devfreq_register_boost_device(enum df_device device, struct devfreq *df)
 
 #endif /* _DEVFREQ_BOOST_H_ */
 
-

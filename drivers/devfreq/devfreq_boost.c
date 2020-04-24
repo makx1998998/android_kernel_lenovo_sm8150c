@@ -411,4 +411,3 @@ free_d:
 }
 subsys_initcall(devfreq_boost_init);
 
-
