@@ -1,5 +1,7 @@
---- drivers/devfreq/devfreq_boost.c
-+++ drivers/devfreq/devfreq_boost.c
+diff --git a/drivers/devfreq/devfreq_boost.c b/drivers/devfreq/devfreq_boost.c
+index 42989df0b4c6..388241e13dcf 100644
+--- a/drivers/devfreq/devfreq_boost.c
++++ b/drivers/devfreq/devfreq_boost.c
 @@ -345,12 +345,12 @@ static int __init devfreq_boost_init(void)
  {
  	struct df_boost_drv *d = &df_boost_drv_g;
