@@ -520,6 +520,7 @@ int update_bw_hwmon(struct bw_hwmon *hwmon)
 		mutex_unlock(&node->mon_lock);
 		return -EBUSY;
 	}
+
 	dev_dbg(df->dev.parent, "Got update request\n");
 	devfreq_monitor_stop(df);
 
@@ -533,6 +534,7 @@ int update_bw_hwmon(struct bw_hwmon *hwmon)
 	devfreq_monitor_start(df);
 	mutex_unlock(&node->mon_lock);
 
+	mutex_unlock(&node->mon_lock);
 	return 0;
 }
 
@@ -941,6 +943,7 @@ int register_bw_hwmon(struct device *dev, struct bw_hwmon *hwmon)
 	node->hw = hwmon;
 
 	mutex_init(&node->mon_lock);
+
 	mutex_lock(&list_lock);
 	list_add_tail(&node->list, &hwmon_list);
 	mutex_unlock(&list_lock);
