@@ -17,6 +17,7 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#include <linux/display_state.h>
 #include <linux/pwm.h>
 #include <video/mipi_display.h>
 
@@ -50,6 +51,13 @@ enum dsi_dsc_ratio_type {
 	DSC_12BPC_8BPP,
 	DSC_RATIO_TYPE_MAX
 };
+
+bool display_on = true;
+
+bool is_display_on()
+{
+	return display_on;
+}
 
 static u32 dsi_dsc_rc_buf_thresh[] = {0x0e, 0x1c, 0x2a, 0x38, 0x46, 0x54,
 		0x62, 0x69, 0x70, 0x77, 0x79, 0x7b, 0x7d, 0x7e};
@@ -503,6 +511,7 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	if (rc)
 		pr_err("[%s] failed to enable vregs, rc=%d\n", panel->name, rc);
 
+	display_on = false;
 	return rc;
 }
 static int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
