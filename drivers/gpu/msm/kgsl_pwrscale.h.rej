@@ -1,0 +1,11 @@
+--- drivers/gpu/msm/kgsl_pwrscale.h
++++ drivers/gpu/msm/kgsl_pwrscale.h
+@@ -63,7 +47,7 @@ struct kgsl_pwr_history {
+  * @enabled - Whether or not power scaling is enabled
+  * @time - Last submitted sample timestamp
+  * @on_time - Timestamp when gpu busy begins
+- * @freq_change_time - Timestamp of last freq change or popp update
++ * @freq_change_time - Timestamp of last freq change
+  * @nh - Notifier for the partner devfreq bus device
+  * @devfreq_wq - Main devfreq workqueue
+  * @devfreq_suspend_ws - Pass device suspension to devfreq
