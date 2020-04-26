@@ -1,0 +1,45 @@
+--- kernel/sched/cpufreq_schedutil.c
++++ kernel/sched/cpufreq_schedutil.c
+@@ -192,7 +142,6 @@ static void sugov_update_commit(struct sugov_policy *sg_policy, u64 time,
+ 		for_each_cpu(cpu, policy->cpus) {
+ 			trace_cpu_frequency(next_freq, cpu);
+ 		}
+-		cpufreq_stats_record_transition(policy, next_freq);
+ 	} else {
+ 		if (use_pelt())
+ 			sg_policy->work_in_progress = true;
+@@ -320,34 +269,7 @@ static bool sugov_cpu_is_busy(struct sugov_cpu *sg_cpu)
+ static inline bool sugov_cpu_is_busy(struct sugov_cpu *sg_cpu) { return false; }
+ #endif /* CONFIG_NO_HZ_COMMON */
+ 
+-#define NL_RATIO 75
+ #define DEFAULT_HISPEED_LOAD 90
+-static void sugov_walt_adjust(struct sugov_cpu *sg_cpu, unsigned long *util,
+-			      unsigned long *max)
+-{
+-	struct sugov_policy *sg_policy = sg_cpu->sg_policy;
+-	bool is_migration = sg_cpu->flags & SCHED_CPUFREQ_INTERCLUSTER_MIG;
+-	unsigned long nl = sg_cpu->walt_load.nl;
+-	unsigned long cpu_util = sg_cpu->util;
+-	bool is_hiload;
+-
+-	if (unlikely(!sysctl_sched_use_walt_cpu_util))
+-		return;
+-
+-	is_hiload = (cpu_util >= mult_frac(sg_policy->avg_cap,
+-					   sg_policy->tunables->hispeed_load,
+-					   100));
+-
+-	if (is_hiload && !is_migration)
+-		*util = max(*util, sg_policy->hispeed_util);
+-
+-	if (is_hiload && nl >= mult_frac(cpu_util, NL_RATIO, 100))
+-		*util = *max;
+-
+-	if (sg_policy->tunables->pl)
+-		*util = max(*util, sg_cpu->walt_load.pl);
+-}
+-
+ static void sugov_update_single(struct update_util_data *hook, u64 time,
+ 				unsigned int flags)
+ {

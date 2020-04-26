@@ -205,55 +205,6 @@ static unsigned long freq_to_util(struct smugov_policy *sg_policy,
 			 sg_policy->policy->cpuinfo.max_freq);
 }
 
-#define KHZ 1000
-static void smugov_track_cycles(struct smugov_policy *sg_policy,
-				unsigned int prev_freq,
-				u64 upto)
-{
-	u64 delta_ns, cycles;
-	u64 next_ws = sg_policy->last_ws + sched_ravg_window;
-
-	if (unlikely(!sysctl_sched_use_walt_cpu_util))
-		return;
-
-	upto = min(upto, next_ws);
-	/* Track cycles in current window */
-	delta_ns = upto - sg_policy->last_cyc_update_time;
-	delta_ns *= prev_freq;
-	do_div(delta_ns, (NSEC_PER_SEC / KHZ));
-	cycles = delta_ns;
-	sg_policy->curr_cycles += cycles;
-	sg_policy->last_cyc_update_time = upto;
-}
-
-static void smugov_calc_avg_cap(struct smugov_policy *sg_policy, u64 curr_ws,
-				unsigned int prev_freq)
-{
-	u64 last_ws = sg_policy->last_ws;
-	unsigned int avg_freq;
-
-	if (unlikely(!sysctl_sched_use_walt_cpu_util))
-		return;
-
-	BUG_ON(curr_ws < last_ws);
-	if (curr_ws <= last_ws)
-		return;
-
-	/* If we skipped some windows */
-	if (curr_ws > (last_ws + sched_ravg_window)) {
-		avg_freq = prev_freq;
-		/* Reset tracking history */
-		sg_policy->last_cyc_update_time = curr_ws;
-	} else {
-		smugov_track_cycles(sg_policy, prev_freq, curr_ws);
-		avg_freq = sg_policy->curr_cycles;
-		avg_freq /= sched_ravg_window / (NSEC_PER_SEC / KHZ);
-	}
-	sg_policy->avg_cap = freq_to_util(sg_policy, avg_freq);
-	sg_policy->curr_cycles = 0;
-	sg_policy->last_ws = curr_ws;
-}
-
 static void smugov_update_commit(struct smugov_policy *sg_policy, u64 time,
 				unsigned int next_freq)
 {
@@ -270,7 +221,6 @@ static void smugov_update_commit(struct smugov_policy *sg_policy, u64 time,
 	sg_policy->last_freq_update_time = time;
 
 	if (policy->fast_switch_enabled) {
-		smugov_track_cycles(sg_policy, sg_policy->policy->cur, time);
 		next_freq = cpufreq_driver_fast_switch(policy, next_freq);
 		if (!next_freq || (next_freq == policy->cur))
 			return;
@@ -279,7 +229,6 @@ static void smugov_update_commit(struct smugov_policy *sg_policy, u64 time,
 		for_each_cpu(cpu, policy->cpus) {
 			trace_cpu_frequency(next_freq, cpu);
 		}
-		cpufreq_stats_record_transition(policy, next_freq);
 	} else {
 		if (use_pelt())
 			sg_policy->work_in_progress = true;
@@ -447,34 +396,7 @@ static bool smugov_cpu_is_busy(struct smugov_cpu *sg_cpu)
 static inline bool smugov_cpu_is_busy(struct smugov_cpu *sg_cpu) { return false; }
 #endif /* CONFIG_NO_HZ_COMMON */
 
-#define NL_RATIO 75
 #define DEFAULT_HISPEED_LOAD 90
-static void smugov_walt_adjust(struct smugov_cpu *sg_cpu, unsigned long *util,
-			      unsigned long *max)
-{
-	struct smugov_policy *sg_policy = sg_cpu->sg_policy;
-	bool is_migration = sg_cpu->flags & SCHED_CPUFREQ_INTERCLUSTER_MIG;
-	unsigned long nl = sg_cpu->walt_load.nl;
-	unsigned long cpu_util = sg_cpu->util;
-	bool is_hiload;
-
-	if (unlikely(!sysctl_sched_use_walt_cpu_util))
-		return;
-
-	is_hiload = (cpu_util >= mult_frac(sg_policy->avg_cap,
-					   sg_policy->tunables->hispeed_load,
-					   100));
-
-	if (is_hiload && !is_migration)
-		*util = max(*util, sg_policy->hispeed_util);
-
-	if (is_hiload && nl >= mult_frac(cpu_util, NL_RATIO, 100))
-		*util = *max;
-
-	if (sg_policy->tunables->pl)
-		*util = max(*util, sg_cpu->walt_load.pl);
-}
-
 static void smugov_update_single(struct update_util_data *hook, u64 time,
 				unsigned int flags)
 {
@@ -485,7 +407,7 @@ static void smugov_update_single(struct update_util_data *hook, u64 time,
 	unsigned int next_f;
 	bool busy;
 
-		if (!sg_policy->tunables->pl && flags & SCHED_CPUFREQ_PL)
+	if (!sg_policy->tunables->pl && flags & SCHED_CPUFREQ_PL)
 		return;
 
 	flags &= ~SCHED_CPUFREQ_RT_DL;
@@ -515,14 +437,8 @@ static void smugov_update_single(struct update_util_data *hook, u64 time,
 		sg_cpu->max = max;
 		sg_cpu->flags = flags;
 
-		smugov_calc_avg_cap(sg_policy, sg_cpu->walt_load.ws,
-				   sg_policy->policy->cur);
-		trace_smugov_util_update(sg_cpu->cpu, sg_cpu->util,
-				sg_policy->avg_cap, max, sg_cpu->walt_load.nl,
-				sg_cpu->walt_load.pl, flags);
 
 		smugov_iowait_boost(sg_cpu, &util, &max);
-		smugov_walt_adjust(sg_cpu, &util, &max);
 		next_f = get_next_freq(sg_policy, util, max);
 		/*
 		 * Do not reduce the frequency if the CPU has not been idle
@@ -584,7 +500,6 @@ static unsigned int smugov_next_freq_shared(struct smugov_cpu *sg_cpu, u64 time)
 		}
 
 		smugov_iowait_boost(j_sg_cpu, &util, &max);
-		smugov_walt_adjust(j_sg_cpu, &util, &max);
 	}
 
 	return get_next_freq(sg_policy, util, max);
@@ -622,13 +537,6 @@ static void smugov_update_shared(struct update_util_data *hook, u64 time,
 	smugov_set_iowait_boost(sg_cpu, time, flags);
 	sg_cpu->last_update = time;
 
-	smugov_calc_avg_cap(sg_policy, sg_cpu->walt_load.ws,
-			   sg_policy->policy->cur);
-
-	trace_smugov_util_update(sg_cpu->cpu, sg_cpu->util, sg_policy->avg_cap,
-				max, sg_cpu->walt_load.nl,
-				sg_cpu->walt_load.pl, flags);
-
 	if (smugov_should_update_freq(sg_policy, time) &&
 		!(flags & SCHED_CPUFREQ_CONTINUE)) {
 		if (flags & SCHED_CPUFREQ_RT_DL)
@@ -645,13 +553,8 @@ static void smugov_update_shared(struct update_util_data *hook, u64 time,
 static void smugov_work(struct kthread_work *work)
 {
 	struct smugov_policy *sg_policy = container_of(work, struct smugov_policy, work);
-	unsigned long flags;
 
 	mutex_lock(&sg_policy->work_lock);
-	raw_spin_lock_irqsave(&sg_policy->update_lock, flags);
-	smugov_track_cycles(sg_policy, sg_policy->policy->cur,
-			   sched_ktime_clock());
-	raw_spin_unlock_irqrestore(&sg_policy->update_lock, flags);
 	__cpufreq_driver_target(sg_policy->policy, sg_policy->next_freq,
 				CPUFREQ_RELATION_L);
 	mutex_unlock(&sg_policy->work_lock);
