@@ -17,6 +17,10 @@
 #include "cam_trace.h"
 #include "cam_res_mgr_api.h"
 #include "cam_common_util.h"
+#include <linux/cpu_input_boost.h>
+#include <linux/devfreq_boost.h>
+#include <linux/devfreq_boost_ddr.h>
+#include <linux/devfreq_boost_gpu.h>
 #include "cam_packet_util.h"
 
 int32_t cam_actuator_construct_default_power_setting(
@@ -492,6 +496,11 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 
 	switch (csl_packet->header.op_code & 0xFFFFFF) {
 	case CAM_ACTUATOR_PACKET_OPCODE_INIT:
+		cpu_input_boost_kick_cluster1(1000);
+		cpu_input_boost_kick_cluster2(1000);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 1000);
+		devfreq_boost_ddr_kick_max(DEVFREQ_MSM_DDRBW, 1000);
+		devfreq_boost_gpu_kick_max(DEVFREQ_MSM_GPUBW, 1000)
 		offset = (uint32_t *)&csl_packet->payload;
 		offset += (csl_packet->cmd_buf_offset / sizeof(uint32_t));
 		cmd_desc = (struct cam_cmd_buf_desc *)(offset);
