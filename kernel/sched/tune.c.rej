@@ -1,0 +1,20 @@
+--- kernel/sched/tune.c
++++ kernel/sched/tune.c
+@@ -885,7 +874,7 @@ static int activate_boost_slot(struct schedtune *st, int boost, int *slot)
+ 	mutex_lock(&boost_slot_mutex);
+ 
+ 	/* Check for slots in available_boost_slots */
+-	if (list_empty(&st->available_boost_slots.list)) {
++	if (list_empty(&(st->available_boost_slots.list))) {
+ 		ret = -EINVAL;
+ 		goto exit;
+ 	}
+@@ -931,7 +921,7 @@ static int deactivate_boost_slot(struct schedtune *st, int slot)
+ 
+ 	/* Delete slot from active_boost_slots */
+ 	list_for_each_entry_safe(curr_slot, next_slot,
+-				 &st->active_boost_slots.list, list) {
++				 &(st->active_boost_slots.list), list) {
+ 		if (curr_slot->idx == slot) {
+ 			st->slot_boost[slot] = 0;
+ 			list_del(&curr_slot->list);

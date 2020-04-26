@@ -1,0 +1,16 @@
+--- kernel/sched/boost.c
++++ kernel/sched/boost.c
+@@ -233,13 +241,6 @@ static void _sched_set_boost(int type)
+ 	else
+ 		sched_boost_disable(-type);
+ 
+-	#ifdef CONFIG_DYNAMIC_STUNE_BOOST
+-	if (type > 0)
+-		do_stune_sched_boost("top-app", &boost_slot);
+-	else
+-		reset_stune_boost("top-app", boost_slot);
+-	#endif // CONFIG_DYNAMIC_STUNE_BOOST
+-
+ 	/*
+ 	 * sysctl_sched_boost holds the boost request from
+ 	 * user space which could be different from the

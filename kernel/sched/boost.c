@@ -218,19 +218,20 @@ static void sched_boost_disable_all(void)
 
 static void _sched_set_boost(int type)
 {
-	if (type == 0)
-		sched_boost_disable_all();
-	else if (type > 0)
-		sched_boost_enable(type);
-	else
-		sched_boost_disable(-type);
 
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
 	if (type > 0)
 		do_stune_sched_boost("top-app", &boost_slot);
 	else
 		reset_stune_boost("top-app", boost_slot);
-	#endif // CONFIG_DYNAMIC_STUNE_BOOST
+#endif // CONFIG_DYNAMIC_STUNE_BOOST
+
+	if (type == 0)
+		sched_boost_disable_all();
+	else if (type > 0)
+		sched_boost_enable(type);
+	else
+		sched_boost_disable(-type);
 
 	/*
 	 * sysctl_sched_boost holds the boost request from
