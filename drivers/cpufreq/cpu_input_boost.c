@@ -602,7 +602,9 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 		if (test_bit(INPUT_BOOST, &b->state)) {
 			if (policy->cpu < 4)
 				policy->min = get_input_boost_freq(policy);
-			if ((policy->cpu > 3) && !little_only)
+			if (((policy->cpu > 3) && (policy->cpu < 7)) && !little_only)
+				policy->min = get_input_boost_freq(policy);
+			if ((policy->cpu  == 7) && boost_gold)
 				policy->min = get_input_boost_freq(policy);
 		}
 		return NOTIFY_OK;
@@ -876,7 +878,7 @@ static int __init cpu_input_boost_init(void)
 	}
 #endif
 
-	boost_thread = kthread_run_low_power(cpu_boost_thread, b, "cpu_boostd");
+	boost_thread = kthread_run_perf_critical(cpu_boost_thread, b, "cpu_boostd");
 	if (IS_ERR(boost_thread)) {
 		pr_err("Failed to start CPU boost thread, err: %ld\n",
 		       PTR_ERR(boost_thread));
