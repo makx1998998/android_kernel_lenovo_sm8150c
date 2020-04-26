@@ -136,7 +136,7 @@ root_schedtune = {
 		.idx = 0,
 	},
 	.slot_boost = {0},
-#endif /* CONFIG_DYNAMIC_STUNE_BOOST *
+#endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 };
 
 /*

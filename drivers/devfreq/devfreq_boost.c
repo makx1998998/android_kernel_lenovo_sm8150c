@@ -387,7 +387,7 @@ static int __init devfreq_boost_init(void)
 	ret = input_register_handler(&devfreq_boost_input_handler);
 	if (ret) {
 		pr_err("Failed to register input handler, err: %d\n", ret);
-		goto destroy_wq;
+		goto stop_kthreads;
 	}
 
 	d->msm_drm_notif.notifier_call = msm_drm_notifier_cb;
