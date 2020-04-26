@@ -179,57 +179,8 @@ accumulate_sum(u64 delta, int cpu, struct sched_avg *sa,
  *   load_avg = u_0` + y*(u_0 + u_1*y + u_2*y^2 + ... )
  *            = u_0 + u_1*y + u_2*y^2 + ... [re-labeling u_i --> u_{i+1}]
  */
-static __always_inline int
-___update_load_sum(u64 now, int cpu, struct sched_avg *sa,
-		  unsigned long load, unsigned long runnable, int running)
-{
-	u64 delta;
 
-	delta = now - sa->last_update_time;
-	/*
-	 * This should only happen when time goes backwards, which it
-	 * unfortunately does during sched clock init when we swap over to TSC.
-	 */
-	if ((s64)delta < 0) {
-		sa->last_update_time = now;
-		return 0;
-	}
-
-	/*
-	 * Use 1024ns as the unit of measurement since it's a reasonable
-	 * approximation of 1us and fast to compute.
-	 */
-	delta >>= 10;
-	if (!delta)
-		return 0;
-
-	sa->last_update_time += delta << 10;
-
-	/*
-	 * running is a subset of runnable (weight) so running can't be set if
-	 * runnable is clear. But there are some corner cases where the current
-	 * se has been already dequeued but cfs_rq->curr still points to it.
-	 * This means that weight will be 0 but not running for a sched_entity
-	 * but also for a cfs_rq if the latter becomes idle. As an example,
-	 * this happens during idle_balance() which calls
-	 * update_blocked_averages()
-	 */
-	if (!load)
-		runnable = running = 0;
-
-	/*
-	 * Now we know we crossed measurement unit boundaries. The *_avg
-	 * accrues by two steps:
-	 *
-	 * Step 1: accumulate *_sum since last_update_time. If we haven't
-	 * crossed period boundaries, finish.
-	 */
-	if (!accumulate_sum(delta, cpu, sa, load, runnable, running))
-		return 0;
-
-	return 1;
-}
-
+static __always_inline 
 int ___update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		  unsigned long weight, int running, struct cfs_rq *cfs_rq,
 		  struct rt_rq *rt_rq)
@@ -335,15 +286,9 @@ int update_rt_rq_load_avg(u64 now, int cpu, struct rt_rq *rt_rq, int running)
 
 int update_dl_rq_load_avg(u64 now, struct rq *rq, int running)
 {
-	if (___update_load_sum(now, rq->cpu, &rq->avg_dl,
-				running,
-				running,
-				running)) {
-
-		___update_load_avg(now, rq->cpu, &rq->avg_dl, running, running, NULL, rq);
+	if (___update_load_avg(now, rq->cpu, &rq->avg_dl, running, running, NULL, rq)) {
 		return 1;
 	}
-
 	return 0;
 }
 
@@ -371,10 +316,6 @@ int update_irq_load_avg(struct rq *rq, u64 running)
 	 * We can safely remove running from rq->clock because
 	 * rq->clock += delta with delta >= running
 	 */
-	ret = ___update_load_sum(rq->clock - running, rq->cpu, &rq->avg_irq,
-				0,
-				0,
-				0);
 	ret = ___update_load_avg(rq->clock, rq->cpu, &rq->avg_irq, running, running, NULL, rq);
 
 	if (ret)
