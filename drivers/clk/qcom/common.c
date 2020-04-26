@@ -265,7 +265,7 @@ int qcom_cc_really_probe(struct platform_device *pdev,
 			return ret;
 	}
 
-	qcom_cc_drop_protected(dev, cc);
+	//qcom_cc_drop_protected(dev, cc);
 
 	for (i = 0; i < num_clks; i++) {
 		if (!rclks[i])
