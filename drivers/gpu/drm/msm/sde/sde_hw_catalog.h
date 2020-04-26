@@ -652,12 +652,10 @@ enum sde_clk_ctrl_type {
 /* struct sde_clk_ctrl_reg : Clock control register
  * @reg_off:           register offset
  * @bit_off:           bit offset
- * @val:               current bit value
  */
 struct sde_clk_ctrl_reg {
 	u32 reg_off;
 	u32 bit_off;
-	int val;
 };
 
 /* struct sde_mdp_cfg : MDP TOP-BLK instance info
@@ -1362,3 +1360,4 @@ static inline bool sde_hw_intf_te_supported(const struct sde_mdss_cfg *sde_cfg)
 	return test_bit(SDE_INTF_TE, &(sde_cfg->intf[0].features));
 }
 #endif /* _SDE_HW_CATALOG_H */
+

@@ -5361,3 +5361,4 @@ void sde_dbg_set_sde_top_offset(u32 blk_off)
 {
 	sde_dbg_base.dbgbus_sde.top_blk_off = blk_off;
 }
+
