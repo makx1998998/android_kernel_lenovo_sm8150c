@@ -1,0 +1,449 @@
+diff --git a/fs/proc/base.c b/fs/proc/base.c
+index 91a12be4229f..4303249608a3 100644
+--- a/fs/proc/base.c
++++ b/fs/proc/base.c
+@@ -92,6 +92,7 @@
+ #include <linux/sched/coredump.h>
+ #include <linux/sched/debug.h>
+ #include <linux/sched/stat.h>
++#include <linux/sched/clock.h>
+ #include <linux/flex_array.h>
+ #include <linux/posix-timers.h>
+ #include <linux/cpufreq_times.h>
+@@ -3232,6 +3233,116 @@ static const struct file_operations proc_hung_task_detection_enabled_operations
+ };
+ #endif
+ 
++static ssize_t proc_sched_task_boost_read(struct file *file,
++			   char __user *buf, size_t count, loff_t *ppos)
++{
++	struct task_struct *task = get_proc_task(file_inode(file));
++	char buffer[PROC_NUMBUF];
++	int sched_boost;
++	size_t len;
++
++	if (!task)
++		return -ESRCH;
++	sched_boost = task->boost;
++	put_task_struct(task);
++	len = snprintf(buffer, sizeof(buffer), "%d\n", sched_boost);
++	return simple_read_from_buffer(buf, count, ppos, buffer, len);
++}
++
++static ssize_t proc_sched_task_boost_write(struct file *file,
++		   const char __user *buf, size_t count, loff_t *ppos)
++{
++	struct task_struct *task = get_proc_task(file_inode(file));
++	char buffer[PROC_NUMBUF];
++	int sched_boost;
++	int err;
++
++	if (!task)
++		return -ESRCH;
++	memset(buffer, 0, sizeof(buffer));
++	if (count > sizeof(buffer) - 1)
++		count = sizeof(buffer) - 1;
++	if (copy_from_user(buffer, buf, count)) {
++		err = -EFAULT;
++		goto out;
++	}
++
++	err = kstrtoint(strstrip(buffer), 0, &sched_boost);
++	if (err)
++		goto out;
++	if (sched_boost < 0 || sched_boost > 2) {
++		err = -EINVAL;
++		goto out;
++	}
++
++	task->boost = sched_boost;
++	if (sched_boost == 0)
++		task->boost_period = 0;
++out:
++	put_task_struct(task);
++	return err < 0 ? err : count;
++}
++
++static ssize_t proc_sched_task_boost_period_read(struct file *file,
++			   char __user *buf, size_t count, loff_t *ppos)
++{
++	struct task_struct *task = get_proc_task(file_inode(file));
++	char buffer[PROC_NUMBUF];
++	u64 sched_boost_period_ms = 0;
++	size_t len;
++
++	if (!task)
++		return -ESRCH;
++	sched_boost_period_ms = div64_ul(task->boost_period, 1000000UL);
++	put_task_struct(task);
++	len = snprintf(buffer, sizeof(buffer), "%llu\n", sched_boost_period_ms);
++	return simple_read_from_buffer(buf, count, ppos, buffer, len);
++}
++
++static ssize_t proc_sched_task_boost_period_write(struct file *file,
++		   const char __user *buf, size_t count, loff_t *ppos)
++{
++	struct task_struct *task = get_proc_task(file_inode(file));
++	char buffer[PROC_NUMBUF];
++	unsigned int sched_boost_period;
++	int err;
++
++	memset(buffer, 0, sizeof(buffer));
++	if (count > sizeof(buffer) - 1)
++		count = sizeof(buffer) - 1;
++	if (copy_from_user(buffer, buf, count)) {
++		err = -EFAULT;
++		goto out;
++	}
++
++	err = kstrtouint(strstrip(buffer), 0, &sched_boost_period);
++	if (err)
++		goto out;
++	if (task->boost == 0 && sched_boost_period) {
++		/* setting boost period without boost is invalid */
++		err = -EINVAL;
++		goto out;
++	}
++
++	task->boost_period = (u64)sched_boost_period * 1000 * 1000;
++	task->boost_expires = sched_clock() + task->boost_period;
++out:
++	put_task_struct(task);
++	return err < 0 ? err : count;
++}
++
++static const struct file_operations proc_task_boost_enabled_operations = {
++	.read       = proc_sched_task_boost_read,
++	.write      = proc_sched_task_boost_write,
++	.llseek     = generic_file_llseek,
++};
++
++static const struct file_operations proc_task_boost_period_operations = {
++	.read		= proc_sched_task_boost_period_read,
++	.write		= proc_sched_task_boost_period_write,
++	.llseek		= generic_file_llseek,
++};
++
+ #ifdef CONFIG_USER_NS
+ static int proc_id_map_open(struct inode *inode, struct file *file,
+ 	const struct seq_operations *seq_ops)
+@@ -3410,6 +3521,8 @@ static const struct pid_entry tgid_base_stuff[] = {
+ #ifdef CONFIG_SCHED_WALT
+ 	REG("sched_init_task_load", 00644, proc_pid_sched_init_task_load_operations),
+ 	REG("sched_group_id", 00666, proc_pid_sched_group_id_operations),
++	REG("sched_boost", 0666,  proc_task_boost_enabled_operations),
++	REG("sched_boost_period_ms", 0666, proc_task_boost_period_operations),
+ #endif
+ 	REG("memplus_type",      S_IRUGO|S_IWUGO, proc_pid_memplus_type_operations),
+ #ifdef CONFIG_SCHED_DEBUG
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index 6b2ec3671729..35f2ddfe2ef5 100755
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -274,6 +274,7 @@ extern int __must_check io_schedule_prepare(void);
+ extern void io_schedule_finish(int token);
+ extern long io_schedule_timeout(long timeout);
+ extern void io_schedule(void);
++extern int set_task_boost(int boost, u64 period);
+ 
+ /**
+  * struct prev_cputime - snapshot of system and user cputime
+@@ -784,7 +785,11 @@ struct task_struct {
+ 	const struct sched_class	*sched_class;
+ 	struct sched_entity		se;
+ 	struct sched_rt_entity		rt;
+-	u64 last_sleep_ts;
++	u64				 last_sleep_ts;
++
++	int				boost;
++	u64				boost_period;
++	u64				boost_expires;
+ #ifdef CONFIG_SCHED_WALT
+ 	struct ravg ravg;
+ 	/*
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index f7ae9276cf12..e226f255d580 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -2308,6 +2308,9 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
+ 	p->se.nr_migrations		= 0;
+ 	p->se.vruntime			= 0;
+ 	p->last_sleep_ts		= 0;
++	p->boost                = 0;
++	p->boost_expires        = 0;
++	p->boost_period         = 0;
+ 
+ 	INIT_LIST_HEAD(&p->se.group_node);
+ 
+@@ -7511,6 +7514,26 @@ const u32 sched_prio_to_wmult[40] = {
+  /*  15 */ 119304647, 148102320, 186737708, 238609294, 286331153,
+ };
+ 
++/*
++ *@boost:should be 0,1,2.
++ *@period:boost time based on ms units.
++ */
++int set_task_boost(int boost, u64 period)
++{
++	if (boost < 0 || boost > 2)
++		return -EINVAL;
++	if (boost) {
++		current->boost = boost;
++		current->boost_period = (u64)period * 1000 * 1000;
++		current->boost_expires = sched_clock() + current->boost_period;
++	} else {
++		current->boost = 0;
++		current->boost_expires = 0;
++		current->boost_period = 0;
++	}
++	return 0;
++}
++
+ #ifdef CONFIG_SCHED_WALT
+ /*
+  * sched_exit() - Set EXITING_TASK_MARKER in task's ravg.demand field
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 40ee9f82d94d..1055fe87f545 100755
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -40,11 +40,6 @@
+ #include "tune.h"
+ #include "walt.h"
+ 
+-#ifdef CONFIG_OPCHAIN
+-#include <../drivers/oneplus/coretech/opchain/opchain_helper.h>
+-
+-#define opc_claim_bit_test(claim, cpu) (claim & ((1 << cpu) | (1 << (cpu + num_present_cpus()))))
+-#endif
+ #ifdef CONFIG_SMP
+ static inline bool task_fits_max(struct task_struct *p, int cpu);
+ #endif /* CONFIG_SMP */
+@@ -2911,6 +2906,18 @@ static inline void cfs_rq_util_change(struct cfs_rq *cfs_rq)
+ 	}
+ }
+ 
++static inline int per_task_boost(struct task_struct *p)
++{
++	if (p->boost_period) {
++		if (sched_clock() > p->boost_expires) {
++			p->boost_period = 0;
++			p->boost_expires = 0;
++			p->boost = 0;
++		}
++	}
++	return p->boost;
++}
++
+ #ifdef CONFIG_SMP
+ /*
+  * Approximate:
+@@ -5308,9 +5315,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+ 	struct sched_entity *se = &p->se;
+ 	int task_new = !(flags & ENQUEUE_WAKEUP);
+ 
+-#ifdef CONFIG_OPCHAIN
+-	opc_task_switch(true, cpu_of(rq), p, 0);
+-#endif
+ #ifdef CONFIG_SCHED_WALT
+ 	p->misfit = !task_fits_max(p, rq->cpu);
+ #endif
+@@ -5403,9 +5407,6 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+ 	struct sched_entity *se = &p->se;
+ 	int task_sleep = flags & DEQUEUE_SLEEP;
+ 
+-#ifdef CONFIG_OPCHAIN
+-	opc_task_switch(false, cpu_of(rq), p, rq->clock);
+-#endif
+ 	/*
+ 	 * The code below (indirectly) updates schedutil which looks at
+ 	 * the cfs_rq utilization to select a frequency.
+@@ -7365,14 +7366,20 @@ static inline bool task_fits_max(struct task_struct *p, int cpu)
+ {
+ 	unsigned long capacity = capacity_orig_of(cpu);
+ 	unsigned long max_capacity = cpu_rq(cpu)->rd->max_cpu_capacity.val;
++	unsigned long task_boost = per_task_boost(p);
+ 
+ 	if (capacity == max_capacity)
+ 		return true;
+ 
+-	if ((task_boost_policy(p) == SCHED_BOOST_ON_BIG ||
+-			schedtune_task_boost(p) > 0) &&
+-			is_min_capacity_cpu(cpu))
+-		return false;
++	if (is_min_capacity_cpu(cpu)) {
++		if (task_boost_policy(p) == SCHED_BOOST_ON_BIG ||
++			task_boost > 0 ||
++			schedtune_task_boost(p) > 0)
++			return false;
++	} else { /* mid cap cpu */
++		if (task_boost > 1)
++			return false;
++	}
+ 
+ 	return task_fits_capacity(p, capacity, cpu);
+ }
+@@ -7382,9 +7389,6 @@ struct find_best_target_env {
+ 	int placement_boost;
+ 	bool need_idle;
+ 	int fastpath;
+-#ifdef CONFIG_OPCHAIN
+-	int op_path;
+-#endif
+ };
+ 
+ static bool is_packing_eligible(struct task_struct *p, int target_cpu,
+@@ -7425,22 +7429,12 @@ static int start_cpu(struct task_struct *p, bool boosted,
+ 	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
+ 	int start_cpu = -1;
+ 
+-#ifdef CONFIG_OPCHAIN
+-	bool is_uxtop = is_opc_task(p, UT_FORE);
+-	if (boosted || (is_uxtop && task_sched_boost(p))) {
+-		if (rd->mid_cap_orig_cpu != -1 &&
+-		    task_fits_max(p, rd->mid_cap_orig_cpu))
+-			return rd->mid_cap_orig_cpu;
+-		return rd->max_cap_orig_cpu;
+-	}
+-#else
+ 	if (boosted) {
+ 		if (rd->mid_cap_orig_cpu != -1 &&
+ 		    task_fits_max(p, rd->mid_cap_orig_cpu))
+ 			return rd->mid_cap_orig_cpu;
+ 		return rd->max_cap_orig_cpu;
+ 	}
+-#endif
+ 
+ 	/* A task always fits on its rtg_target */
+ 	if (rtg_target) {
+@@ -7573,12 +7567,7 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
+ 			 * so prev_cpu will receive a negative bias due to the double
+ 			 * accounting. However, the blocked utilization may be zero.
+ 			 */
+-#ifdef CONFIG_OPCHAIN
+-			wake_util = opc_cpu_util(cpu_util_wake(i, p),
+-									i, p, fbt_env->op_path);
+-#else
+ 			wake_util = cpu_util_without(i, p);
+-#endif
+ 			new_util = wake_util + task_util_est(p);
+ 			spare_wake_cap = capacity_orig_of(i) - wake_util;
+ 
+@@ -8159,10 +8148,8 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
+ 	int placement_boost = task_boost_policy(p);
+ 	u64 start_t = 0;
+ 	int next_cpu = -1, backup_cpu = -1;
+-#ifdef CONFIG_OPCHAIN
+-	bool is_uxtop = is_opc_task(p, UT_FORE);
+-#endif
+-	int boosted = (schedtune_task_boost(p) > 0);
++
++	int boosted = (schedtune_task_boost(p) > 0 || per_task_boost(p) > 0);
+ 
+ 	fbt_env.fastpath = 0;
+ 
+@@ -8171,22 +8158,12 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
+ 
+ 	if (need_idle)
+ 		sync = 0;
+-#ifdef CONFIG_OPCHAIN
+-	if (sysctl_sched_sync_hint_enable && sync &&
+-				bias_to_waker_cpu(p, cpu, rtg_target) &&
+-				(!is_uxtop || cpu >= FIRST_BIG_CORE)) {
+-		target_cpu = cpu;
+-		fbt_env.fastpath = SYNC_WAKEUP;
+-		goto out;
+-	}
+-#else
+ 	if (sysctl_sched_sync_hint_enable && sync &&
+ 				bias_to_waker_cpu(p, cpu, rtg_target)) {
+ 		target_cpu = cpu;
+ 		fbt_env.fastpath = SYNC_WAKEUP;
+ 		goto out;
+ 	}
+-#endif
+ 	/* prepopulate energy diff environment */
+ 	eenv = get_eenv(p, prev_cpu);
+ 	if (eenv->max_cpu_count < 2)
+@@ -8290,17 +8267,10 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
+ out:
+ 	if (target_cpu < 0)
+ 		target_cpu = prev_cpu;
+-#ifdef CONFIG_OPCHAIN
+-	trace_sched_task_util(p, next_cpu, backup_cpu, target_cpu, sync,
+-			need_idle, fbt_env.fastpath, placement_boost,
+-			rtg_target ? cpumask_first(rtg_target) : -1, is_uxtop,
+-			start_t);
+-#else
+ 	trace_sched_task_util(p, next_cpu, backup_cpu, target_cpu, sync,
+ 			need_idle, fbt_env.fastpath, placement_boost,
+ 			rtg_target ? cpumask_first(rtg_target) : -1, start_t,
+ 			boosted);
+-#endif
+ 	return target_cpu;
+ }
+ 
+@@ -9033,10 +9003,6 @@ enum group_type {
+ #define LBF_SOME_PINNED	0x08
+ #define LBF_IGNORE_BIG_TASKS 0x100
+ #define LBF_IGNORE_PREFERRED_CLUSTER_TASKS 0x200
+-#ifdef CONFIG_OPCHAIN
+-#define LBF_IGNORE_UX_TOP 0x800
+-#define LBF_IGNORE_SLAVE 0xC00
+-#endif
+ 
+ struct lb_env {
+ 	struct sched_domain	*sd;
+@@ -9234,13 +9200,6 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
+ 	if (env->flags & LBF_IGNORE_BIG_TASKS &&
+ 		!task_fits_max(p, env->dst_cpu))
+ 		return 0;
+-#endif
+-#ifdef CONFIG_OPCHAIN
+-	if (env->flags & LBF_IGNORE_UX_TOP && is_opc_task(p, UT_FORE))
+-		return 0;
+-
+-	if (env->flags & LBF_IGNORE_SLAVE && p->utask_slave)
+-		return 0;
+ #endif
+ 	if (task_running(env->src_rq, p)) {
+ 		schedstat_inc(p->se.statistics.nr_failed_migrations_running);
+@@ -9336,9 +9295,6 @@ static int detach_tasks(struct lb_env *env)
+ 	unsigned long load = 0;
+ 	int detached = 0;
+ 	int orig_loop = env->loop;
+-#ifdef CONFIG_OPCHAIN
+-	int src_claim = opc_get_claim_on_cpu(env->src_cpu);
+-#endif
+ 	lockdep_assert_held(&env->src_rq->lock);
+ 
+ 	if (env->imbalance <= 0)
+@@ -9346,18 +9302,8 @@ static int detach_tasks(struct lb_env *env)
+ 
+ 	if (!same_cluster(env->dst_cpu, env->src_cpu))
+ 		env->flags |= LBF_IGNORE_PREFERRED_CLUSTER_TASKS;
+-#ifdef CONFIG_OPCHAIN
+-	if (cpu_capacity(env->dst_cpu) < cpu_capacity(env->src_cpu)) {
+-		env->flags |= LBF_IGNORE_BIG_TASKS;
+-		if (src_claim == 1)
+-			env->flags |= LBF_IGNORE_UX_TOP | LBF_IGNORE_SLAVE;
+-		else if (src_claim == -1)
+-			env->flags |= LBF_IGNORE_SLAVE;
+-	}
+-#else
+ 	if (cpu_capacity(env->dst_cpu) < cpu_capacity(env->src_cpu))
+ 		env->flags |= LBF_IGNORE_BIG_TASKS;
+-#endif
+ 
+ redo:
+ 	while (!list_empty(tasks)) {
+@@ -9439,10 +9385,6 @@ static int detach_tasks(struct lb_env *env)
+ 		tasks = &env->src_rq->cfs_tasks;
+ 		env->flags &= ~(LBF_IGNORE_BIG_TASKS |
+ 				LBF_IGNORE_PREFERRED_CLUSTER_TASKS);
+-#ifdef CONFIG_OPCHAIN
+-		if (env->flags & LBF_IGNORE_SLAVE)
+-			env->flags &= ~LBF_IGNORE_SLAVE;
+-#endif
+ 		env->loop = orig_loop;
+ 		goto redo;
+ 	}
