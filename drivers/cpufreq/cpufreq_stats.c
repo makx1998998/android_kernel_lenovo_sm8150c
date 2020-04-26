@@ -14,15 +14,13 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 
-static DEFINE_SPINLOCK(cpufreq_stats_lock);
-
 struct cpufreq_stats {
 	unsigned int total_trans;
 	unsigned long long last_time;
 	unsigned int max_state;
 	unsigned int state_num;
 	unsigned int last_index;
-	u64 *time_in_state;
+	atomic64_t *time_in_state;
 	unsigned int *freq_table;
 	unsigned int *trans_table;
 };
@@ -31,10 +29,9 @@ static int cpufreq_stats_update(struct cpufreq_stats *stats)
 {
 	unsigned long long cur_time = get_jiffies_64();
 
-	spin_lock(&cpufreq_stats_lock);
-	stats->time_in_state[stats->last_index] += cur_time - stats->last_time;
-	stats->last_time = cur_time;
-	spin_unlock(&cpufreq_stats_lock);
+	atomic64_add(cur_time - stats->last_time,
+		     &stats->time_in_state[stats->last_index]);
+	WRITE_ONCE(stats->last_time, cur_time);
 	return 0;
 }
 
@@ -42,9 +39,9 @@ static void cpufreq_stats_clear_table(struct cpufreq_stats *stats)
 {
 	unsigned int count = stats->max_state;
 
-	memset(stats->time_in_state, 0, count * sizeof(u64));
+	memset(stats->time_in_state, 0, count * sizeof(atomic64_t));
 	memset(stats->trans_table, 0, count * count * sizeof(int));
-	stats->last_time = get_jiffies_64();
+	WRITE_ONCE(stats->last_time, get_jiffies_64());
 	stats->total_trans = 0;
 }
 
@@ -64,9 +61,11 @@ static ssize_t show_time_in_state(struct cpufreq_policy *policy, char *buf)
 
 	cpufreq_stats_update(stats);
 	for (i = 0; i < stats->state_num; i++) {
+		u64 time_in_state = atomic64_read(&stats->time_in_state[i]);
+
 		len += sprintf(buf + len, "%u %llu\n", stats->freq_table[i],
 			(unsigned long long)
-			jiffies_64_to_clock_t(stats->time_in_state[i]));
+			jiffies_64_to_clock_t(time_in_state));
 	}
 	return len;
 }
@@ -184,7 +183,7 @@ void cpufreq_stats_create_table(struct cpufreq_policy *policy)
 	if (!stats)
 		return;
 
-	alloc_size = count * sizeof(int) + count * sizeof(u64);
+	alloc_size = count * sizeof(int) + count * sizeof(atomic64_t);
 
 	alloc_size += count * count * sizeof(int);
 
