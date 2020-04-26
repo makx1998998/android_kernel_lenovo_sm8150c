@@ -235,7 +235,7 @@ static void update_stune_boost(struct boost_drv *b, int BIT, int level,
 			    int *slot)
 {
 	if (level && !test_and_set_bit(BIT, &b->stune_state)) {
-		if (!do_stune_boost("top-app", level, slot))
+		do_stune_boost("top-app", level, slot);
 	}
 }
 
