@@ -94,3 +94,4 @@ TRACE_EVENT(kyber_throttled,
 
 /* This part must be outside protection */
 #include <trace/define_trace.h>
+
