@@ -13,10 +13,19 @@
 
 #include <linux/cpufreq.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 
 /*********************************************************************
  *                     FREQUENCY TABLE HELPERS                       *
  *********************************************************************/
+
+static unsigned short little_cluster_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_LITTLE_MIN;
+static unsigned int big_cluster_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_BIG_MIN;
+static unsigned int prime_core_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_PRIME_MIN;
+
+module_param(little_cluster_min, uint, 0644);
+module_param(big_cluster_min, uint, 0644);
+module_param(prime_core_min, uint, 0644);
 
 bool policy_has_boost_freq(struct cpufreq_policy *policy)
 {
@@ -61,15 +70,15 @@ int cpufreq_frequency_table_cpuinfo(struct cpufreq_policy *policy,
 
 #if CONFIG_CPU_FREQ_DEFAULT_LITTLE_MIN
 	if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
-		policy->min = CONFIG_CPU_FREQ_DEFAULT_LITTLE_MIN;
+		policy->min = little_cluster_min;
 #endif
 #if CONFIG_CPU_FREQ_DEFAULT_BIG_MIN
 	if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
-		policy->min = CONFIG_CPU_FREQ_DEFAULT_BIG_MIN;
+		policy->min = big_cluster_min;
 #endif
 #if CONFIG_CPU_FREQ_DEFAULT_PRIME_MIN
 	if (cpumask_test_cpu(policy->cpu, cpu_gold_mask))
-		policy->min = CONFIG_CPU_FREQ_DEFAULT_PRIME_MIN;
+		policy->min = prime_core_min;
 #endif
 
 	if (max_freq > cpuinfo_max_freq_cached)
