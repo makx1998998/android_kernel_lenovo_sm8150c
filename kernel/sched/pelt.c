@@ -286,7 +286,7 @@ int ___update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 		cfs_rq->runnable_load_avg =
 			div_u64(cfs_rq->runnable_load_sum, LOAD_AVG_MAX - 1024 + sa->period_contrib);
 	}
-	sa->util_avg = sa->util_sum / (LOAD_AVG_MAX - 1024 + sa->period_contrib);
+	WRITE_ONCE(sa->util_avg, sa->util_sum / (LOAD_AVG_MAX - 1024 + sa->period_contrib));
 
 	return 1;
 }
