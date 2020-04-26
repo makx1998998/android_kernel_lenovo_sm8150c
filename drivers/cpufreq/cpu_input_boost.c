@@ -183,8 +183,7 @@ static unsigned int get_input_boost_freq(struct cpufreq_policy *policy)
 		return input_boost_freq_lp;
 	else if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
 		return input_boost_freq_hp;
-	else if (cpumask_test_cpu(policy->cpu, cpu_gold_mask))
-		return  input_boost_freq_gold; 
+	return  input_boost_freq_gold; 
 }
 
 static unsigned int get_max_boost_freq(struct cpufreq_policy *policy)
@@ -193,8 +192,7 @@ static unsigned int get_max_boost_freq(struct cpufreq_policy *policy)
 		return max_boost_freq_lp;
 	else if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
 		return max_boost_freq_hp;
-	else if (cpumask_test_cpu(policy->cpu, cpu_gold_mask))
-		return max_boost_freq_gold;
+	return max_boost_freq_gold;
 }
 
 static unsigned int get_flex_boost_freq(struct cpufreq_policy *policy)
@@ -203,8 +201,7 @@ static unsigned int get_flex_boost_freq(struct cpufreq_policy *policy)
 		return flex_boost_freq_lp;
 	else if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
 		return  flex_boost_freq_hp;
-	else if (cpumask_test_cpu(policy->cpu, cpu_gold_mask))
-		return  flex_boost_freq_gold; 
+	return  flex_boost_freq_gold; 
 }
 
 static unsigned int get_min_freq(struct boost_drv *b, u32 cpu)
@@ -213,8 +210,7 @@ static unsigned int get_min_freq(struct boost_drv *b, u32 cpu)
 		return remove_input_boost_freq_lp;
 	if (cpumask_test_cpu(cpu, cpu_perf_mask))
 		return remove_input_boost_freq_perf;
-	else if (cpumask_test_cpu(cpu, cpu_gold_mask))
-		return remove_input_boost_freq_gold;
+	return remove_input_boost_freq_gold;
 }
 
 static void update_online_cpu_policy(void)
