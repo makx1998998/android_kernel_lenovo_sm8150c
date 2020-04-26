@@ -179,9 +179,8 @@ accumulate_sum(u64 delta, int cpu, struct sched_avg *sa,
  *   load_avg = u_0` + y*(u_0 + u_1*y + u_2*y^2 + ... )
  *            = u_0 + u_1*y + u_2*y^2 + ... [re-labeling u_i --> u_{i+1}]
  */
-
 static __always_inline 
-int ___update_load_avg(u64 now, int cpu, struct sched_avg *sa,
+int ___update_load_sum(u64 now, int cpu, struct sched_avg *sa,
 		  unsigned long weight, int running, struct cfs_rq *cfs_rq,
 		  struct rt_rq *rt_rq)
 {
@@ -229,6 +228,12 @@ int ___update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 	if (!accumulate_sum(delta, cpu, sa, weight, running, cfs_rq))
 		return 0;
 
+	return 1;
+}
+
+static __always_inline void
+___update_load_avg(struct sched_avg *sa, struct cfs_rq *cfs_rq)
+{
 	/*
 	 * Step 2: update *_avg.
 	 */
@@ -238,20 +243,24 @@ int ___update_load_avg(u64 now, int cpu, struct sched_avg *sa,
 			div_u64(cfs_rq->runnable_load_sum, LOAD_AVG_MAX - 1024 + sa->period_contrib);
 	}
 	WRITE_ONCE(sa->util_avg, sa->util_sum / (LOAD_AVG_MAX - 1024 + sa->period_contrib));
-
-	return 1;
 }
 
 int __update_load_avg_blocked_se(u64 now, int cpu, struct sched_entity *se)
-{
-	return ___update_load_avg(now, cpu, &se->avg, 0, 0, NULL, NULL);
+{	
+	int ret;
+
+	ret = ___update_load_sum(now, cpu, &se->avg, 0, 0, NULL, NULL);
+	___update_load_avg(&se->avg, NULL);
+		
+	return ret;
 }
 
 int __update_load_avg_se(u64 now, int cpu, struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	if (___update_load_avg(now, cpu, &se->avg,
+	if (___update_load_sum(now, cpu, &se->avg,
 			       se->on_rq * scale_load_down(se->load.weight),
 			       cfs_rq->curr == se, NULL, NULL)) {
+		___update_load_avg(&se->avg, NULL);
 		cfs_se_util_change(&se->avg);
 		return 1;
 	}
@@ -261,16 +270,22 @@ int __update_load_avg_se(u64 now, int cpu, struct cfs_rq *cfs_rq, struct sched_e
 
 int __update_load_avg_cfs_rq(u64 now, int cpu, struct cfs_rq *cfs_rq)
 {
-	return ___update_load_avg(now, cpu, &cfs_rq->avg,
+	int ret;
+
+	ret = ___update_load_sum(now, cpu, &cfs_rq->avg,
 			scale_load_down(cfs_rq->load.weight),
 			cfs_rq->curr != NULL, cfs_rq, NULL);
+	___update_load_avg(&cfs_rq->avg, cfs_rq);
+
+	return ret;
 }
 
 int update_rt_rq_load_avg(u64 now, int cpu, struct rt_rq *rt_rq, int running)
 {
 	int ret;
 
-	ret = ___update_load_avg(now, cpu, &rt_rq->avg, running, running, NULL, rt_rq);
+	ret = ___update_load_sum(now, cpu, &rt_rq->avg, running, running, NULL, rt_rq);
+	___update_load_avg(&rt_rq->avg, NULL);
 
 	return ret;
 }
@@ -286,7 +301,8 @@ int update_rt_rq_load_avg(u64 now, int cpu, struct rt_rq *rt_rq, int running)
 
 int update_dl_rq_load_avg(u64 now, struct rq *rq, int running)
 {
-	if (___update_load_avg(now, rq->cpu, &rq->avg_dl, running, running, NULL, rq)) {
+	if (___update_load_sum(now, rq->cpu, &rq->avg_dl, running, running, NULL, NULL)) {	
+		___update_load_avg(&rq->avg_dl, NULL);
 		return 1;
 	}
 	return 0;
@@ -316,11 +332,14 @@ int update_irq_load_avg(struct rq *rq, u64 running)
 	 * We can safely remove running from rq->clock because
 	 * rq->clock += delta with delta >= running
 	 */
-	ret = ___update_load_avg(rq->clock, rq->cpu, &rq->avg_irq, running, running, NULL, rq);
+	ret = ___update_load_sum(rq->clock - running, rq->cpu, &rq->avg_irq, 0, 0, NULL, NULL);
+
+	ret += ___update_load_sum(rq->clock, rq->cpu, &rq->avg_irq, 1, 1, NULL, NULL);
 
 	if (ret)
-		ret = ___update_load_avg(rq->clock, rq->cpu, &rq->avg_irq, running, running, NULL, rq);
+		___update_load_avg(&rq->avg_irq, NULL);
 
 	return ret;
 }
 #endif
+
