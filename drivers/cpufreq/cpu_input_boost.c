@@ -48,9 +48,6 @@ static  unsigned int input_thread_prio __read_mostly = CONFIG_INPUT_THREAD_PRIOR
 static unsigned int gpu_boost_extender_ms __read_mostly = CONFIG_GPU_BOOST_EXTENDER_MS;
 static bool little_only __read_mostly = false;
 static bool boost_gold __read_mostly = true;
-static unsigned int save_min_freq_lp;
-static unsigned int save_min_freq_hp;
-static unsigned int save_min_freq_gold;
 
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
 static short dynamic_stune_boost __read_mostly = 20;
@@ -99,9 +96,7 @@ enum {
 	CLUSTER2_WAKE_BOOST,
 	INPUT_STUNE_BOOST,
 	MAX_STUNE_BOOST,
-	FLEX_STUNE_BOOST,
-	GOTO_SLEEP,
-	WAKE_UP
+	FLEX_STUNE_BOOST
 };
 
 struct boost_drv {
@@ -239,17 +234,15 @@ static void update_online_cpu_policy(void)
 static void update_stune_boost(struct boost_drv *b, int BIT, int level,
 			    int *slot)
 {
-	if (level && !test_bit(BIT, &b->stune_state)) {
+	if (level && !test_and_set_bit(BIT, &b->stune_state)) {
 		if (!do_stune_boost("top-app", level, slot))
-			set_bit(BIT, &b->stune_state);
 	}
 }
 
 static void clear_stune_boost(struct boost_drv *b, u32 BIT, int slot)
 {
-	if (test_bit(BIT, &b->stune_state)) {
+	if (test_and_clear_bit(BIT, &b->stune_state)) {
 		reset_stune_boost("top-app", slot);
-		clear_bit(BIT, &b->stune_state);
 	}
 }
 
@@ -637,6 +630,7 @@ static int msm_drm_notifier_cb(struct notifier_block *nb,
 		set_bit(SCREEN_ON, &b->state);
 		update_gpu_boost(b, gpu_min_freq);
 	} else if (*blank == MSM_DRM_BLANK_POWERDOWN_CUST) {
+		update_gpu_boost(b, gpu_sleep_freq);
 		clear_bit(SCREEN_ON, &b->state);
 		clear_bit(INPUT_BOOST, &b->state);
 		clear_bit(FLEX_BOOST, &b->state);
@@ -647,7 +641,6 @@ static int msm_drm_notifier_cb(struct notifier_block *nb,
 		clear_bit(INPUT_STUNE_BOOST, &b->state);
 		clear_bit(MAX_STUNE_BOOST, &b->state);
 		clear_bit(FLEX_STUNE_BOOST, &b->state);
-		update_gpu_boost(b, gpu_sleep_freq);
 		pr_info("Screen off, boosts turned off\n");
 		pr_info("Screen off, GPU frequency sleep\n");
 		pr_info("Screen off, CPU frequency sleep\n");
@@ -674,6 +667,7 @@ static int fb_notifier_cb(struct notifier_block *nb, unsigned long action,
 		set_bit(SCREEN_ON, &b->state);
 		update_gpu_boost(b, gpu_min_freq);
 	} else {
+		update_gpu_boost(b, gpu_sleep_freq);
 		clear_bit(SCREEN_ON, &b->state);
 		clear_bit(INPUT_BOOST, &b->state);
 		clear_bit(FLEX_BOOST, &b->state);
@@ -684,7 +678,6 @@ static int fb_notifier_cb(struct notifier_block *nb, unsigned long action,
 		clear_bit(INPUT_STUNE_BOOST, &b->state);
 		clear_bit(MAX_STUNE_BOOST, &b->state);
 		clear_bit(FLEX_STUNE_BOOST, &b->state);
-		update_gpu_boost(b, gpu_sleep_freq);
 		pr_info("Screen off, boosts turned off\n");
 		pr_info("Screen off, GPU frequency sleep\n");
 		pr_info("Screen off, CPU frequency sleep\n");
@@ -853,8 +846,6 @@ static int __init cpu_input_boost_init(void)
 	}
 
 	set_bit(SCREEN_ON, &b->state);
-	clear_bit(WAKE_UP, &b->state);
-	clear_bit(GOTO_SLEEP, &b->state);
 
 	b->cpu_notif.notifier_call = cpu_notifier_cb;
 	b->cpu_notif.priority = INT_MAX;
