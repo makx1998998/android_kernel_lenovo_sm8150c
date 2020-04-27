@@ -19,7 +19,7 @@
  *                     FREQUENCY TABLE HELPERS                       *
  *********************************************************************/
 
-static unsigned short little_cluster_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_LITTLE_MIN;
+static unsigned int little_cluster_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_LITTLE_MIN;
 static unsigned int big_cluster_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_BIG_MIN;
 static unsigned int prime_core_min __read_mostly = CONFIG_CPU_FREQ_DEFAULT_PRIME_MIN;
 

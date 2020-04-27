@@ -1279,7 +1279,7 @@ static void smugov_limits(struct cpufreq_policy *policy)
 	if (!policy->fast_switch_enabled) {
 		mutex_lock(&sg_policy->work_lock);
 		cpufreq_policy_apply_limits(policy);
-		mutex_unlock(&sg_policy->work_lock);'
+		mutex_unlock(&sg_policy->work_lock);
 	} else {
 		ret = cpufreq_policy_apply_limits_fast(policy);
 		if (ret && policy->cur != ret)

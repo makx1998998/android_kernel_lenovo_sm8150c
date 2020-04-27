@@ -2,6 +2,7 @@
 
 int __update_load_avg_blocked_se(u64 now, int cpu, struct sched_entity *se);
 int __update_load_avg_se(u64 now, int cpu, struct cfs_rq *cfs_rq, struct sched_entity *se);
+int __update_load_avg_cfs_rq(u64 now, int cpu, struct cfs_rq *cfs_rq);
 int update_rt_rq_load_avg(u64 now, int cpu, struct rt_rq *rt_rq, int running);
 int update_dl_rq_load_avg(u64 now, struct rq *rq, int running);
 
@@ -67,4 +68,6 @@ update_irq_load_avg(struct rq *rq, u64 running)
 	return 0;
 }
 #endif
+
+
 

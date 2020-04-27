@@ -9204,6 +9204,7 @@ static void update_blocked_averages(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 	struct cfs_rq *cfs_rq;
+	const struct sched_class *curr_class;
 	struct rq_flags rf;
 	bool done = true;
 
@@ -9214,6 +9215,7 @@ static void update_blocked_averages(int cpu)
 	 * Iterates the task_group tree in a bottom up fashion, see
 	 * list_add_leaf_cfs_rq() for details.
 	 */
+	curr_class = rq->curr->sched_class;
 	for_each_leaf_cfs_rq(rq, cfs_rq) {
 		struct sched_entity *se;
 
@@ -9230,7 +9232,9 @@ static void update_blocked_averages(int cpu)
 			update_load_avg(se, 0);
 
 	}
+	update_rt_rq_load_avg(rq_clock_task(rq), cpu, &rq->rt, curr_class == &rt_sched_class);
 	update_dl_rq_load_avg(rq_clock_task(rq), rq, curr_class == &dl_sched_class);
+	update_irq_load_avg(rq, 0);
 	/* Don't need periodic decay once load/util_avg are null */
 #ifdef CONFIG_NO_HZ_COMMON
 	rq->last_blocked_load_update_tick = jiffies;
@@ -9415,7 +9419,7 @@ static unsigned long scale_rt_capacity(struct sched_domain *sd, int cpu)
 #if defined(CONFIG_IRQ_TIME_ACCOUNTING) || defined(CONFIG_PARAVIRT_TIME_ACCOUNTING)
 	unsigned long irq;
 #endif
-	#if defined(CONFIG_IRQ_TIME_ACCOUNTING) || defined(CONFIG_PARAVIRT_TIME_ACCOUNTING)
+#if defined(CONFIG_IRQ_TIME_ACCOUNTING) || defined(CONFIG_PARAVIRT_TIME_ACCOUNTING)
 	irq = READ_ONCE(rq->avg_irq.util_avg);
 
 	if (unlikely(irq >= max))
@@ -12830,3 +12834,4 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 }
 
 #endif /* CONFIG_SCHED_WALT */
+
