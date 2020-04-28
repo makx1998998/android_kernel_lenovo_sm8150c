@@ -44,10 +44,11 @@ static unsigned int gpu_min_freq __read_mostly = CONFIG_GPU_MIN_FREQ;
 static unsigned int gpu_sleep_freq __read_mostly = 180; 
 static unsigned short input_boost_duration __read_mostly = CONFIG_INPUT_BOOST_DURATION_MS;
 static unsigned short flex_boost_duration __read_mostly = CONFIG_FLEX_BOOST_DURATION_MS;
-static  unsigned int input_thread_prio __read_mostly = CONFIG_INPUT_THREAD_PRIORITY;
+static unsigned int input_thread_prio __read_mostly = CONFIG_INPUT_THREAD_PRIORITY;
 static unsigned int gpu_boost_extender_ms __read_mostly = CONFIG_GPU_BOOST_EXTENDER_MS;
 static bool little_only __read_mostly = false;
 static bool boost_gold __read_mostly = true;
+static bool gpu_oc __read_mostly = false;
 
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
 static short dynamic_stune_boost __read_mostly = 20;
@@ -86,6 +87,7 @@ module_param(flex_boost_duration, short, 0644);
 module_param(gpu_boost_extender_ms, uint, 0644);
 module_param(little_only, bool, 0644);
 module_param(boost_gold, bool, 0644);
+module_param(gpu_oc, bool, 0644);
 
 enum {
 	SCREEN_ON,
@@ -255,18 +257,25 @@ static void update_gpu_boost(struct boost_drv *b, int freq)
 {
 	int level;
 	if (gpu_boost_freq==0) return;
-	if (!test_bit(SCREEN_ON, &b->state)) {
-		level=8;
-		return;
+	
+	if (gpu_oc) {
+		if (freq==427)
+			level=5;
+		if (freq==345)
+			level=6;
+		if (freq==257)
+			level=7;
+		if (freq==180)
+			level=8;
+	} else {
+		if (freq==427)
+			level=3;
+		if (freq==345)
+			level=4;
+		if (freq==257)
+			level=5;
 	}
-	if (freq==427)
-		level=5;
-	if (freq==345)
-		level=6;
-	if (freq==257)
-		level=7;
-	if (freq==180)
-		level=8;
+
 	mutex_lock(&b->gpu_device->mutex);
 	b->gpu_pwr->min_pwrlevel=level;
 	mutex_unlock(&b->gpu_device->mutex);
@@ -822,6 +831,7 @@ static int __init cpu_input_boost_init(void)
 	
 	b->state = 0;
 	b->stune_state=0;
+	set_stune_boost_default("top-app", &default_level_stune_boost);
 	
 	b->wq_i = alloc_workqueue("cpu_input_boost_wq_i", WQ_HIGHPRI, 0);
 	if (!b->wq_i) {
@@ -955,5 +965,4 @@ unregister_cpu_notif:
 	return ret;
 }
 late_initcall(cpu_input_boost_init);
-
 
