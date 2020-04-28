@@ -1,14 +1,16 @@
 --- kernel/sched/fair.c
 +++ kernel/sched/fair.c
-@@ -9201,8 +9215,11 @@ static void update_blocked_averages(int cpu)
- 		se = cfs_rq->tg->se[cpu];
- 		if (se && !skip_blocked_update(se))
- 			update_load_avg(se, 0);
-+
+@@ -7863,6 +7865,13 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
+ 		fbt_env.fastpath = SYNC_WAKEUP;
+ 		goto out;
  	}
- 	update_rt_rq_load_avg(rq_clock_task(rq), cpu, &rq->rt, curr_class == &rt_sched_class);
-+	update_dl_rq_load_avg(rq_clock_task(rq), rq, curr_class == &dl_sched_class);
-+	/* Don't need periodic decay once load/util_avg are null */
- #ifdef CONFIG_NO_HZ_COMMON
- 	rq->last_blocked_load_update_tick = jiffies;
- #endif
++
++	if (use_sync_boost) {
++		sync_boost = sync && cpu >= start_cpu(p, true, 0);
++	} else {
++		sync_boost = false;
++	}
++
+ 	/* prepopulate energy diff environment */
+ 	eenv = get_eenv(p, prev_cpu);
+ 	if (eenv->max_cpu_count < 2)
