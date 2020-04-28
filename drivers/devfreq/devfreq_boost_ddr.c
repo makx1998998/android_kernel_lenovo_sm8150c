@@ -220,10 +220,10 @@ static void devfreq_update_boosts(struct boost_dev *b, unsigned long state)
 	} else {
 		mutex_lock(&df->lock);
 		df->min_freq = test_bit(FLEX_BOOST, &state) ?
-			min(devfreq_boost_ddr_freq_low, df->max_freq) :
+			devfreq_boost_ddr_freq_low :
 			df->profile->freq_table[0];
 		df->min_freq = test_bit(INPUT_BOOST, &state) ?
-			min(devfreq_boost_ddr_freq, df->max_freq) :
+			devfreq_boost_ddr_freq :
 			df->profile->freq_table[0];
 			df->max_boost = test_bit(MAX_BOOST, &state);
 		update_devfreq(df);
