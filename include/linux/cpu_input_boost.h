@@ -6,7 +6,7 @@
 #define _CPU_INPUT_BOOST_H_
 
 #ifdef CONFIG_CPU_INPUT_BOOST
-extern short base_stune_boost;
+extern unsigned int base_stune_boost;
 extern unsigned int default_level_stune_boost;
 void cpu_input_boost_kick_flex(void);
 void cpu_input_boost_kick_core(unsigned int duration_ms, unsigned int cpu);
