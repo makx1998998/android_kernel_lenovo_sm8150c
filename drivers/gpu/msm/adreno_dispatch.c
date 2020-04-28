@@ -2561,7 +2561,7 @@ static void adreno_dispatcher_work(struct adreno_device *adreno_dev)
 	static int adreno_dispatcher_thread(void *data)
 {
 	static const struct sched_param sched_rt_prio = {
-		.sched_priority = 16
+		.sched_priority = 25
 	};
 	struct adreno_device *adreno_dev = data;
 	struct adreno_dispatcher *dispatcher = &adreno_dev->dispatcher;
@@ -2895,7 +2895,7 @@ int adreno_dispatcher_init(struct adreno_device *adreno_dev)
 
 	init_waitqueue_head(&dispatcher->cmd_waitq);
 	dispatcher->state = (atomic_t)ATOMIC_INIT(THREAD_IDLE);
-	dispatcher->thread = kthread_run_low_power(adreno_dispatcher_thread, adreno_dev,
+	dispatcher->thread = kthread_run_perf_critical(adreno_dispatcher_thread, adreno_dev,
 					 "adreno_dispatch");
 	if (IS_ERR(dispatcher->thread))
 		return PTR_ERR(dispatcher->thread);
