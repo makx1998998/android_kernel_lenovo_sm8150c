@@ -332,9 +332,6 @@ struct cpufreq_driver {
 
 	struct freq_attr **attr;
 
-	/* platform specific boost support code */
-	bool		boost_enabled;
-	int		(*set_boost)(int state);
 };
 
 /* flags */
@@ -663,10 +660,6 @@ int cpufreq_frequency_table_get_index(struct cpufreq_policy *policy,
 ssize_t cpufreq_show_cpus(const struct cpumask *mask, char *buf);
 
 #ifdef CONFIG_CPU_FREQ
-int cpufreq_boost_trigger_state(int state);
-int cpufreq_boost_enabled(void);
-int cpufreq_enable_boost_support(void);
-bool policy_has_boost_freq(struct cpufreq_policy *policy);
 
 /* Find lowest freq at or above target in a table in ascending order */
 static inline int cpufreq_table_find_index_al(struct cpufreq_policy *policy,

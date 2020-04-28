@@ -557,33 +557,6 @@ EXPORT_SYMBOL_GPL(cpufreq_policy_transition_delay_us);
 /*********************************************************************
  *                          SYSFS INTERFACE                          *
  *********************************************************************/
-static ssize_t show_boost(struct kobject *kobj,
-			  struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", cpufreq_driver->boost_enabled);
-}
-
-static ssize_t store_boost(struct kobject *kobj, struct kobj_attribute *attr,
-			   const char *buf, size_t count)
-{
-	int ret, enable;
-
-	ret = sscanf(buf, "%d", &enable);
-	if (ret != 1 || enable < 0 || enable > 1)
-		return -EINVAL;
-
-	if (cpufreq_boost_trigger_state(enable)) {
-		pr_err("%s: Cannot %s BOOST!\n",
-		       __func__, enable ? "enable" : "disable");
-		return -EINVAL;
-	}
-
-	pr_debug("%s: cpufreq BOOST %s\n",
-		 __func__, enable ? "enabled" : "disabled");
-
-	return count;
-}
-define_one_global_rw(boost);
 
 static struct cpufreq_governor *find_governor(const char *str_governor)
 {
@@ -2381,75 +2354,6 @@ static int cpufreq_boost_set_sw(int state)
 	return ret;
 }
 
-int cpufreq_boost_trigger_state(int state)
-{
-	unsigned long flags;
-	int ret = 0;
-
-	if (cpufreq_driver->boost_enabled == state)
-		return 0;
-
-	write_lock_irqsave(&cpufreq_driver_lock, flags);
-	cpufreq_driver->boost_enabled = state;
-	write_unlock_irqrestore(&cpufreq_driver_lock, flags);
-
-	ret = cpufreq_driver->set_boost(state);
-	if (ret) {
-		write_lock_irqsave(&cpufreq_driver_lock, flags);
-		cpufreq_driver->boost_enabled = !state;
-		write_unlock_irqrestore(&cpufreq_driver_lock, flags);
-
-		pr_err("%s: Cannot %s BOOST\n",
-		       __func__, state ? "enable" : "disable");
-	}
-
-	return ret;
-}
-
-static bool cpufreq_boost_supported(void)
-{
-	return likely(cpufreq_driver) && cpufreq_driver->set_boost;
-}
-
-static int create_boost_sysfs_file(void)
-{
-	int ret;
-
-	ret = sysfs_create_file(cpufreq_global_kobject, &boost.attr);
-	if (ret)
-		pr_err("%s: cannot register global BOOST sysfs file\n",
-		       __func__);
-
-	return ret;
-}
-
-static void remove_boost_sysfs_file(void)
-{
-	if (cpufreq_boost_supported())
-		sysfs_remove_file(cpufreq_global_kobject, &boost.attr);
-}
-
-int cpufreq_enable_boost_support(void)
-{
-	if (!cpufreq_driver)
-		return -EINVAL;
-
-	if (cpufreq_boost_supported())
-		return 0;
-
-	cpufreq_driver->set_boost = cpufreq_boost_set_sw;
-
-	/* This will get removed on driver unregister */
-	return create_boost_sysfs_file();
-}
-EXPORT_SYMBOL_GPL(cpufreq_enable_boost_support);
-
-int cpufreq_boost_enabled(void)
-{
-	return cpufreq_driver->boost_enabled;
-}
-EXPORT_SYMBOL_GPL(cpufreq_boost_enabled);
-
 /*********************************************************************
  *               FREQUENCY INVARIANT ACCOUNTING SUPPORT              *
  *********************************************************************/
@@ -2529,15 +2433,7 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 	if (driver_data->setpolicy)
 		driver_data->flags |= CPUFREQ_CONST_LOOPS;
 
-	if (cpufreq_boost_supported()) {
-		ret = create_boost_sysfs_file();
-		if (ret)
-			goto err_null_driver;
-	}
-
 	ret = subsys_interface_register(&cpufreq_interface);
-	if (ret)
-		goto err_boost_unreg;
 
 	if (!(cpufreq_driver->flags & CPUFREQ_STICKY) &&
 	    list_empty(&cpufreq_policy_list)) {
@@ -2562,8 +2458,6 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 
 err_if_unreg:
 	subsys_interface_unregister(&cpufreq_interface);
-err_boost_unreg:
-	remove_boost_sysfs_file();
 err_null_driver:
 	write_lock_irqsave(&cpufreq_driver_lock, flags);
 	cpufreq_driver = NULL;
@@ -2594,7 +2488,6 @@ int cpufreq_unregister_driver(struct cpufreq_driver *driver)
 	/* Protect against concurrent cpu hotplug */
 	cpus_read_lock();
 	subsys_interface_unregister(&cpufreq_interface);
-	remove_boost_sysfs_file();
 	cpuhp_remove_state_nocalls_cpuslocked(hp_online);
 
 	write_lock_irqsave(&cpufreq_driver_lock, flags);

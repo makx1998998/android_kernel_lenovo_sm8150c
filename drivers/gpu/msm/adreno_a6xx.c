@@ -1827,66 +1827,6 @@ static struct adreno_irq a6xx_irq = {
 	.mask = A6XX_INT_MASK,
 };
 
-static bool adreno_is_qdss_dbg_register(struct kgsl_device *device,
-		unsigned int offsetwords)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-
-	return adreno_dev->qdss_gfx_virt &&
-		(offsetwords >= (adreno_dev->qdss_gfx_base >> 2)) &&
-		(offsetwords < (adreno_dev->qdss_gfx_base +
-				adreno_dev->qdss_gfx_len) >> 2);
-}
-
-
-static void adreno_qdss_gfx_dbg_regread(struct kgsl_device *device,
-	unsigned int offsetwords, unsigned int *value)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	unsigned int qdss_gfx_offset;
-
-	if (!adreno_is_qdss_dbg_register(device, offsetwords))
-		return;
-
-	qdss_gfx_offset = (offsetwords << 2) - adreno_dev->qdss_gfx_base;
-	*value = __raw_readl(adreno_dev->qdss_gfx_virt + qdss_gfx_offset);
-
-	/*
-	 * ensure this read finishes before the next one.
-	 * i.e. act like normal readl()
-	 */
-	rmb();
-}
-
-static void adreno_qdss_gfx_dbg_regwrite(struct kgsl_device *device,
-	unsigned int offsetwords, unsigned int value)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	unsigned int qdss_gfx_offset;
-
-	if (!adreno_is_qdss_dbg_register(device, offsetwords))
-		return;
-
-	qdss_gfx_offset = (offsetwords << 2) - adreno_dev->qdss_gfx_base;
-	trace_kgsl_regwrite(device, offsetwords, value);
-
-	/*
-	 * ensure previous writes post before this one,
-	 * i.e. act like normal writel()
-	 */
-	wmb();
-	__raw_writel(value, adreno_dev->qdss_gfx_virt + qdss_gfx_offset);
-}
-
-static void adreno_gx_regread(struct kgsl_device *device,
-	unsigned int offsetwords, unsigned int *value)
-{
-	if (adreno_is_qdss_dbg_register(device, offsetwords))
-		adreno_qdss_gfx_dbg_regread(device, offsetwords, value);
-	else
-		kgsl_regread(device, offsetwords, value);
-}
-
 static void adreno_gx_regwrite(struct kgsl_device *device,
 	unsigned int offsetwords, unsigned int value)
 {

@@ -62,6 +62,9 @@ static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE
 static unsigned int default_level_stune_boost __read_mostly = 5;
 static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
+static unsigned int gpu_prev_freq=257;
+
+module_param(default_level_stune_boost, short, 0644);
 module_param(base_stune_boost, short, 0644);
 module_param(input_stune_boost_offset, short, 0644);
 module_param(max_stune_boost_offset, short, 0644);
@@ -264,8 +267,12 @@ static void update_stune_boost(struct boost_drv *b) {
 static void set_gpu_boost(struct boost_drv *b, int freq)
 {
 	int level;
+	if (freq == gpu_prev_freq)
+		return;
+	else 
+		gpu_prev_freq = freq;
 
-	if (gpu_oc) {
+	if (likely(gpu_oc)) {
 		if (freq == 427)
 			level = 5;
 		if (freq == 345)
@@ -954,61 +961,61 @@ static int __init cpu_input_boost_init(void)
 	b->stune_state = 0;
 	set_stune_boost("top-app", sleep_level_stune_boost);
 	
-	b->wq_i = alloc_workqueue("cpu_input_boost_wq_i", WQ_HIGHPRI, 0);
+	b->wq_i = alloc_workqueue("cpu_input_boost_wq_i", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_i) {
 		ret = -ENOMEM;
 		return ret;
 	}
 	
-	b->wq_f = alloc_workqueue("cpu_input_boost_wq_f", WQ_HIGHPRI, 0);
+	b->wq_f = alloc_workqueue("cpu_input_boost_wq_f", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_f) {
 		ret = -ENOMEM;
 		return ret;
 	}
 	
-	b->wq_cl1 = alloc_workqueue("cpu_input_boost_wq_cl1", WQ_HIGHPRI, 0);
+	b->wq_cl1 = alloc_workqueue("cpu_input_boost_wq_cl1", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_cl1) {
 		ret = -ENOMEM;
 		return ret;
 	}
 	
-	b->wq_cl2 = alloc_workqueue("cpu_input_boost_wq_cl2", WQ_HIGHPRI, 0);
+	b->wq_cl2 = alloc_workqueue("cpu_input_boost_wq_cl2", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_cl2) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_istu = alloc_workqueue("cpu_input_boost_wq_istu", WQ_HIGHPRI, 0);
+	b->wq_istu = alloc_workqueue("cpu_input_boost_wq_istu", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_istu) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_mstu = alloc_workqueue("cpu_input_boost_wq_mstu", WQ_HIGHPRI, 0);
+	b->wq_mstu = alloc_workqueue("cpu_input_boost_wq_mstu", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_mstu) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_gpu = alloc_workqueue("cpu_input_boost_wq_gpu", WQ_HIGHPRI, 0);
+	b->wq_gpu = alloc_workqueue("cpu_input_boost_wq_gpu", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_gpu) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_gpu_flex = alloc_workqueue("cpu_input_boost_wq_gpu_flex", WQ_HIGHPRI, 0);
+	b->wq_gpu_flex = alloc_workqueue("cpu_input_boost_wq_gpu_flex", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_gpu_flex) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_fstu = alloc_workqueue("cpu_input_boost_wq_fstu", WQ_HIGHPRI, 0);
+	b->wq_fstu = alloc_workqueue("cpu_input_boost_wq_fstu", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_fstu) {
 		ret = -ENOMEM;
 		return ret;
 	}
 
-	b->wq_core = alloc_workqueue("cpu_input_boost_wq_core", WQ_HIGHPRI, 0);
+	b->wq_core = alloc_workqueue("cpu_input_boost_wq_core", WQ_POWER_EFFICIENT, 0);
 	if (!b->wq_core) {
 		ret = -ENOMEM;
 		return ret;

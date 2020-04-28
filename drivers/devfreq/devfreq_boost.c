@@ -413,9 +413,9 @@ static int __init devfreq_boost_init(void)
 
 	for (i = 0; i < DEVFREQ_MAX; i++) {
 		struct boost_dev *b = d->devices + i;
-		b->wq_i = alloc_workqueue("devfreq_boost_wq_i", WQ_HIGHPRI, 0);
-		b->wq_f = alloc_workqueue("devfreq_boost_wq_f", WQ_HIGHPRI, 0);
-		b->wq_m = alloc_workqueue("devfreq_boost_wq_m", WQ_HIGHPRI, 0);
+		b->wq_i = alloc_workqueue("devfreq_boost_wq_i", WQ_POWER_EFFICIENT, 0);
+		b->wq_f = alloc_workqueue("devfreq_boost_wq_f", WQ_POWER_EFFICIENT, 0);
+		b->wq_m = alloc_workqueue("devfreq_boost_wq_m", WQ_POWER_EFFICIENT, 0);
 		
 		thread[i] = kthread_run_low_power(devfreq_boost_thread, b,
 						      "devfreq_boostd/%d", i);
