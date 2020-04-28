@@ -1,0 +1,15 @@
+--- drivers/devfreq/bimc-bwmon.c
++++ drivers/devfreq/bimc-bwmon.c
+@@ -1190,9 +1224,10 @@ static int bimc_bwmon_driver_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	m->hw.of_node = of_parse_phandle(dev->of_node, "qcom,target-dev", 0);
+-	if (!m->hw.of_node)
++	if (!m->hw.of_node) {
++		dev_err(dev, "target dev not available\n");
+ 		return -EINVAL;
+-
++	}
+ 	if (m->spec->hw_sampling) {
+ 		ret = of_property_read_u32(dev->of_node, "qcom,hw-timer-hz",
+ 					   &m->hw_timer_hz);
