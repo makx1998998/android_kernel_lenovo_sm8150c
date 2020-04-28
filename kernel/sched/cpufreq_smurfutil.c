@@ -20,6 +20,7 @@
 #include <linux/display_state.h>
 #include "sched.h"
 #include <linux/version.h>
+#include <linux/cpu_input_boost.h>
 
 #define SUGOV_KTHREAD_PRIORITY	50
 
@@ -52,7 +53,6 @@ struct smugov_tunables {
 	struct gov_attr_set attr_set;
 	unsigned int		up_rate_limit_us;
 	unsigned int		down_rate_limit_us;
-	bool iowait_boost_enable;
 	unsigned int bit_shift1;
 	unsigned int bit_shift1_2;
 	unsigned int bit_shift2;
@@ -60,7 +60,9 @@ struct smugov_tunables {
 	unsigned int target_load2;
 	unsigned int silver_suspend_max_freq;
 	unsigned int gold_suspend_max_freq;
+	bool iowait_boost_enable;
 	bool turbo_mode;
+	bool load_based_boost;
 };
 
 struct smugov_policy {
@@ -249,7 +251,7 @@ static unsigned int get_next_freq(struct smugov_policy *sg_policy,
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
 	unsigned int silver_max_freq, gold_max_freq;
-
+	unsigned int min_freq;
 	unsigned long load = 100 * util / max;
 
 	if(load < tunables->target_load1){
@@ -263,35 +265,134 @@ static unsigned int get_next_freq(struct smugov_policy *sg_policy,
 			freq = (freq - (freq >> tunables->bit_shift2)) * util / max;
 	}
 
-	switch(policy->cpu){
-	case 0:
-		if(!is_display_on() &&  silver_max_freq > 0 && silver_max_freq < freq) {
-			silver_max_freq = sg_policy->tunables->silver_suspend_max_freq;
-			return silver_max_freq;
+	if (gov_cpu_state != NULL) {
+		if (test_bit(CORE_BOOST, &gov_cpu_state->cpu_state) && (policy->cpu == gov_cpu_state->cpu)) {
+			gov_cpu_state->cpu = 8;
+			freq =  get_max_boost_freq(policy);
+			return freq;
 		}
-		break;
-	case 1:
-	case 2:
-	case 3:
-		if(!is_display_on())
-			return policy->min;
-		break;
-		
-	case 4:
-		if(!is_display_on() && gold_max_freq > 0 && gold_max_freq < freq) {
-			gold_max_freq = sg_policy->tunables->gold_suspend_max_freq;
-			return gold_max_freq; 
+
+		/* Boost CPU to max frequency for max boost */
+		if (test_bit(CLUSTER1_BOOST, &gov_cpu_state->cpu_state) && (policy->cpu < 4)) {
+			if (!tunables->load_based_boost) {
+				freq = get_max_boost_freq(policy);
+				return freq;
+			}
+			if (load >= tunables->target_load2) {
+				freq = get_max_boost_freq(policy);
+				return freq;
+			}
+			if (load >= tunables->target_load1) {
+				freq = get_input_boost_freq(policy);
+				return freq;;
+			}
 		}
-		break;
-	case 5:
-	case 6:
-	case 7:
-		if(!is_display_on())
-			return policy->min;
-		break;
-	default:
-		BUG();
+		if (test_bit(CLUSTER2_BOOST, &gov_cpu_state->cpu_state)) {
+			if ((policy->cpu > 3) && (policy->cpu < 7)) {
+				if (!tunables->load_based_boost) {
+					freq = get_max_boost_freq(policy);
+					return freq;
+				}
+				if (load >= tunables->target_load2) {
+					freq = get_max_boost_freq(policy);
+					return freq;
+				}
+				if (load >= tunables->target_load1) {
+					freq = get_input_boost_freq(policy);
+					return freq;
+				}
+			}
+			if ((policy->cpu  == 7) && boost_gold) {
+				if (!tunables->load_based_boost) {
+					freq = get_max_boost_freq(policy);
+					return freq;
+				}
+				if (load >= tunables->target_load2) {
+					freq = get_max_boost_freq(policy);
+					return freq;
+				}
+				if (load >= tunables->target_load1) {
+					freq = get_input_boost_freq(policy);
+					return freq;
+				}
+			}
+		}
+
+		if (test_bit(INPUT_BOOST, &gov_cpu_state->cpu_state) || test_bit(FLEX_BOOST, &gov_cpu_state->cpu_state)) {
+			if (test_bit(INPUT_BOOST, &gov_cpu_state->cpu_state)) {
+				if (policy->cpu < 4)
+					if (freq < get_input_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+					}
+				if ((policy->cpu > 3) && (policy->cpu < 7))
+					if (freq < get_input_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+					}
+				if ((policy->cpu  == 7) && boost_gold)
+					if (freq < get_input_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_input_boost_freq(policy);
+							return freq;
+						}
+					}
+			}
+			if (test_bit(FLEX_BOOST, &gov_cpu_state->cpu_state)) {
+				if (policy->cpu < 4)
+					if (freq < get_flex_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+					}
+				if ((policy->cpu > 3) && (policy->cpu < 7))
+					if (freq < get_flex_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+					}
+				if ((policy->cpu  == 7) && boost_gold)
+					if (freq < get_flex_boost_freq(policy)) {
+						if (!tunables->load_based_boost) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+						if (load >= tunables->target_load1) {
+							freq = get_flex_boost_freq(policy);
+							return freq;
+						}
+					}
+			}
+		}
 	}
+
+
 	trace_smugov_next_freq(policy->cpu, util, max, freq);
 
 	if (freq == sg_policy->cached_raw_freq && !sg_policy->need_freq_update)
@@ -859,6 +960,28 @@ static ssize_t turbo_mode_store(struct gov_attr_set *attr_set,
 	return count;
 }
 
+static ssize_t load_based_boost_show(struct gov_attr_set *attr_set,
+					char *buf)
+{
+	struct smugov_tunables *tunables = to_smugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->load_based_boost);
+}
+
+static ssize_t load_based_boost_store(struct gov_attr_set *attr_set,
+					 const char *buf, size_t count)
+{
+	struct smugov_tunables *tunables = to_smugov_tunables(attr_set);
+	bool enable;
+
+	if (kstrtobool(buf, &enable))
+		return -EINVAL;
+
+	tunables->load_based_boost = enable;
+
+	return count;
+}
+
 static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
 static struct governor_attr bit_shift1 = __ATTR_RW(bit_shift1);
@@ -870,6 +993,7 @@ static struct governor_attr silver_suspend_max_freq = __ATTR_RW(silver_suspend_m
 static struct governor_attr gold_suspend_max_freq = __ATTR_RW(gold_suspend_max_freq);
 static struct governor_attr iowait_boost_enable = __ATTR_RW(iowait_boost_enable);
 static struct governor_attr turbo_mode = __ATTR_RW(turbo_mode);
+static struct governor_attr load_based_boost = __ATTR_RW(load_based_boost);
 
 static struct attribute *smugov_attributes[] = {
 	&up_rate_limit_us.attr,
@@ -883,6 +1007,7 @@ static struct attribute *smugov_attributes[] = {
 	&gold_suspend_max_freq.attr,
 	&iowait_boost_enable.attr,
 	&turbo_mode,
+	&load_based_boost,
 	NULL
 };
 
@@ -1007,6 +1132,8 @@ static void smugov_tunables_save(struct cpufreq_policy *policy,
 	cached->silver_suspend_max_freq = tunables->silver_suspend_max_freq;
 	cached->gold_suspend_max_freq = tunables->gold_suspend_max_freq;
 	cached->turbo_mode = tunables->turbo_mode;
+	cached->load_based_boost = tunables->load_based_boost;
+	
 }
 
 static void smugov_tunables_free(struct smugov_tunables *tunables)
@@ -1036,6 +1163,7 @@ static void smugov_tunables_restore(struct cpufreq_policy *policy)
 	tunables->silver_suspend_max_freq = cached->silver_suspend_max_freq;
 	tunables->gold_suspend_max_freq = cached->gold_suspend_max_freq;
 	tunables->turbo_mode = cached->turbo_mode;	
+	tunables->load_based_boost = cached->load_based_boost;
 	sg_policy->down_rate_delay_ns = cached->down_rate_limit_us;
 	update_min_rate_limit_ns(sg_policy);
 }
@@ -1107,6 +1235,7 @@ static int smugov_init(struct cpufreq_policy *policy)
 
 	tunables->iowait_boost_enable = true;
 	tunables->turbo_mode = false;
+	tunables->load_based_boost = true;
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
 	stale_ns = sched_ravg_window + (sched_ravg_window >> 3);

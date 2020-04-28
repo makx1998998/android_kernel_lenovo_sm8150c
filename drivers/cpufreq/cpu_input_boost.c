@@ -41,9 +41,9 @@ static unsigned int max_boost_freq_gold __read_mostly = CONFIG_MAX_BOOST_FREQ_GO
 static unsigned int remove_input_boost_freq_lp __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_LP;
 static unsigned int remove_input_boost_freq_perf __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_PERF;
 static unsigned int remove_input_boost_freq_gold __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_GOLD;
-static unsigned int sleep_freq_lp __read_mostly = 576000;
-static unsigned int sleep_freq_hp __read_mostly = 710400;
-static unsigned int sleep_freq_gold __read_mostly = 825600;
+unsigned int sleep_freq_lp __read_mostly = 576000;
+unsigned int sleep_freq_hp __read_mostly = 710400;
+unsigned int sleep_freq_gold __read_mostly = 825600;
 static unsigned int gpu_boost_freq __read_mostly = CONFIG_GPU_BOOST_FREQ;
 static unsigned int gpu_min_freq __read_mostly = CONFIG_GPU_MIN_FREQ;
 static unsigned int gpu_sleep_freq __read_mostly = 180; 
@@ -52,7 +52,7 @@ static unsigned short flex_boost_duration __read_mostly = CONFIG_FLEX_BOOST_DURA
 static unsigned int input_thread_prio __read_mostly = CONFIG_INPUT_THREAD_PRIORITY;
 static unsigned int gpu_boost_extender_ms __read_mostly = CONFIG_GPU_BOOST_EXTENDER_MS;
 static bool little_only __read_mostly = false;
-static bool boost_gold __read_mostly = true;
+bool boost_gold __read_mostly = true;
 static bool gpu_oc __read_mostly = false;
 static bool ufs_boost __read_mostly = false;
 
@@ -66,6 +66,8 @@ static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE
 static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
 static unsigned int gpu_prev_freq=257;
+
+struct boost_drv *gov_cpu_state = NULL;
 
 module_param(default_level_stune_boost, uint, 0644);
 module_param(base_stune_boost, uint, 0644);
@@ -100,63 +102,6 @@ module_param(ufs_boost, bool, 0644);
 module_param(sleep_freq_lp, uint, 0644);
 module_param(sleep_freq_hp, uint, 0644);
 module_param(sleep_freq_gold, uint, 0644);
-
-enum {
-	SCREEN_ON,
-	INPUT_BOOST,
-	FLEX_BOOST,
-	CLUSTER1_BOOST,
-	CLUSTER2_BOOST,
-	CORE_BOOST,
-	CLUSTER1_WAKE_BOOST,
-	CLUSTER2_WAKE_BOOST,
-	INPUT_STUNE_BOOST,
-	MAX_STUNE_BOOST,
-	FLEX_STUNE_BOOST,
-	UFS_BOOST,
-	GPU_INPUT_BOOST,
-	GPU_FLEX_BOOST,
-};
-
-struct boost_drv {
-	struct workqueue_struct *wq_i;
-	struct workqueue_struct *wq_f;
-	struct workqueue_struct *wq_cl1;
-	struct workqueue_struct *wq_cl2;
-	struct workqueue_struct *wq_istu;
-	struct workqueue_struct *wq_mstu;
-	struct workqueue_struct *wq_ufs;
-	struct workqueue_struct *wq_fstu;
-	struct workqueue_struct *wq_gpu;
-	struct workqueue_struct *wq_gpu_flex;
-	struct workqueue_struct *wq_core;
-	struct delayed_work input_unboost;
-	struct delayed_work flex_unboost;
-	struct delayed_work gpu_flex_unboost;
-	struct delayed_work core_unboost;
-	struct delayed_work ufs_unboost;
-	struct delayed_work cluster1_unboost;
-	struct delayed_work cluster2_unboost;
-	struct delayed_work input_stune_unboost;
-	struct delayed_work max_stune_unboost;
-	struct delayed_work flex_stune_unboost;
-	struct delayed_work gpu_unboost;
-	struct notifier_block cpu_notif;
-#ifdef CONFIG_DRM_MSM
-	struct notifier_block msm_drm_notif;
-#else
-	struct notifier_block fb_notif;
-#endif
-	struct kgsl_device *gpu_device;
-	struct kgsl_pwrctrl *gpu_pwr;
-	wait_queue_head_t cpu_boost_waitq;
-	wait_queue_head_t gpu_boost_waitq;
-	wait_queue_head_t stune_boost_waitq;
-	unsigned long cpu_state;
-	unsigned long stune_state;
-	unsigned long gpu_state;
-	unsigned int cpu;
-};
 
 static void input_unboost_worker(struct work_struct *work);
 static void flex_unboost_worker(struct work_struct *work);
@@ -198,7 +143,7 @@ static struct boost_drv boost_drv_g __read_mostly = {
 	.stune_boost_waitq = __WAIT_QUEUE_HEAD_INITIALIZER(boost_drv_g.stune_boost_waitq)
 };
 
-static unsigned int get_input_boost_freq(struct cpufreq_policy *policy)
+unsigned int get_input_boost_freq(struct cpufreq_policy *policy)
 {
 	if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
 		return input_boost_freq_lp;
@@ -207,7 +152,7 @@ static unsigned int get_input_boost_freq(struct cpufreq_policy *policy)
 	return  input_boost_freq_gold; 
 }
 
-static unsigned int get_max_boost_freq(struct cpufreq_policy *policy)
+unsigned int get_max_boost_freq(struct cpufreq_policy *policy)
 {
 	if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
 		return max_boost_freq_lp;
@@ -216,7 +161,7 @@ static unsigned int get_max_boost_freq(struct cpufreq_policy *policy)
 	return max_boost_freq_gold;
 }
 
-static unsigned int get_flex_boost_freq(struct cpufreq_policy *policy)
+unsigned int get_flex_boost_freq(struct cpufreq_policy *policy)
 {
 	if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
 		return flex_boost_freq_lp;
@@ -225,11 +170,11 @@ static unsigned int get_flex_boost_freq(struct cpufreq_policy *policy)
 	return  flex_boost_freq_gold; 
 }
 
-static unsigned int get_min_freq(struct boost_drv *b, u32 cpu)
+unsigned int get_min_freq(struct cpufreq_policy *policy)
 {
-	if (cpumask_test_cpu(cpu, cpu_lp_mask))
+	if (cpumask_test_cpu(policy->cpu, cpu_lp_mask))
 		return remove_input_boost_freq_lp;
-	if (cpumask_test_cpu(cpu, cpu_perf_mask))
+	if (cpumask_test_cpu(policy->cpu, cpu_perf_mask))
 		return remove_input_boost_freq_perf;
 	return remove_input_boost_freq_gold;
 }
@@ -330,7 +275,7 @@ static void __cpu_input_boost_kick(struct boost_drv *b)
 			msecs_to_jiffies(input_boost_duration))) {
 		if (!test_bit(INPUT_BOOST, &b->cpu_state)) {
 			set_bit(INPUT_BOOST, &b->cpu_state);
-			wake_up(&b->cpu_boost_waitq);
+			//wake_up(&b->cpu_boost_waitq);
 		}
 	}
 	if (!mod_delayed_work(b->wq_istu, &b->input_stune_unboost,
@@ -357,7 +302,7 @@ static void __cpu_input_boost_kick_core(struct boost_drv *b,
 			      msecs_to_jiffies(duration_ms))) {
 		if (!test_bit(CORE_BOOST, &b->cpu_state)) {
 			set_bit(CORE_BOOST, &b->cpu_state);
-			wake_up(&b->cpu_boost_waitq);
+			//wake_up(&b->cpu_boost_waitq);
 		}
 	}	
 }
@@ -383,6 +328,7 @@ static void __cpu_input_boost_kick_ufs(struct boost_drv *b,
 			msecs_to_jiffies(duration_ms))) {
 		if (!test_bit(UFS_BOOST, &b->cpu_state)) {
 			set_bit(UFS_BOOST, &b->cpu_state);
+			wake_up(&b->cpu_boost_waitq);
 		}
 	}
 }
@@ -394,7 +340,7 @@ static void __cpu_input_boost_kick_cluster1(struct boost_drv *b,
 			msecs_to_jiffies(duration_ms))) {
 		if (!test_bit(CLUSTER1_BOOST, &b->cpu_state)) {
 			set_bit(CLUSTER1_BOOST, &b->cpu_state);
-			wake_up(&b->cpu_boost_waitq);
+			//wake_up(&b->cpu_boost_waitq);
 		}
 	}
 	if (!mod_delayed_work(b->wq_mstu, &b->max_stune_unboost,
@@ -413,7 +359,7 @@ static void __cpu_input_boost_kick_cluster2(struct boost_drv *b,
 			msecs_to_jiffies(duration_ms))) {
 		if (!test_bit(CLUSTER2_BOOST, &b->cpu_state)) {
 			set_bit(CLUSTER2_BOOST, &b->cpu_state);
-			wake_up(&b->cpu_boost_waitq);
+			//wake_up(&b->cpu_boost_waitq);
 		}
 	}
 	if (!test_bit(CLUSTER1_BOOST, &b->cpu_state) || !test_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state))
@@ -558,7 +504,7 @@ static void __cpu_input_boost_kick_flex(struct boost_drv *b, unsigned int durati
 			msecs_to_jiffies(act_duration_ms))) {
 		if (!test_bit(FLEX_BOOST, &b->cpu_state)) {
 			set_bit(FLEX_BOOST, &b->cpu_state);
-			wake_up(&b->cpu_boost_waitq);
+			//wake_up(&b->cpu_boost_waitq);
 		}
 	}
 	if (base_stune_boost+flex_stune_boost_offset > 0)
@@ -587,7 +533,7 @@ static void input_unboost_worker(struct work_struct *work)
 					   typeof(*b), input_unboost);
 	
 	clear_bit(INPUT_BOOST, &b->cpu_state);
-	wake_up(&b->cpu_boost_waitq);
+	//wake_up(&b->cpu_boost_waitq);
 }
 
 static void core_unboost_worker(struct work_struct *work)
@@ -596,7 +542,7 @@ static void core_unboost_worker(struct work_struct *work)
 					   typeof(*b), core_unboost);
 
 	clear_bit(CORE_BOOST, &b->cpu_state);
-	wake_up(&b->cpu_boost_waitq);
+	//wake_up(&b->cpu_boost_waitq);
 }
 
 static void ufs_unboost_worker(struct work_struct *work)
@@ -605,6 +551,7 @@ static void ufs_unboost_worker(struct work_struct *work)
 					   typeof(*b), ufs_unboost);
 
 	clear_bit(UFS_BOOST, &b->cpu_state);
+	wake_up(&b->cpu_boost_waitq);
 }
 
 static void cluster1_unboost_worker(struct work_struct *work)
@@ -633,7 +580,7 @@ static void flex_unboost_worker(struct work_struct *work)
 					   typeof(*b), flex_unboost);
 
 	clear_bit(FLEX_BOOST, &b->cpu_state);
-	wake_up(&b->cpu_boost_waitq);
+	//wake_up(&b->cpu_boost_waitq);
 }
 
 static void input_stune_unboost_worker(struct work_struct *work)
@@ -793,10 +740,24 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 	if (action != CPUFREQ_ADJUST)
 		return NOTIFY_OK;
 
+	if (test_bit(SCREEN_ON, &b->cpu_state)) {
+		if (policy->cpu < 4) {
+			policy->min=get_min_freq(policy);
+		}
+		if ((policy->cpu > 3) && (policy->cpu < 7)) {
+			policy->min=get_min_freq(policy);
+		}
+		if (policy->cpu==7) {
+			policy->min=get_min_freq(policy);
+		}
+		return NOTIFY_OK;
+	}
+
 	if (test_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state) && (policy->cpu < 4)) {
 		policy->min = get_max_boost_freq(policy);
 		return NOTIFY_OK;
 	}
+
 	if (test_bit(CLUSTER2_WAKE_BOOST, &b->cpu_state)) {
 		if ((policy->cpu > 3) && (policy->cpu < 7))
 			policy->min = get_max_boost_freq(policy);
@@ -805,7 +766,6 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 		return NOTIFY_OK;
 	}
 
-	/* Unboost when the screen is off */
 	if (!test_bit(SCREEN_ON, &b->cpu_state)) {
 		if (policy->cpu < 4) {
 			policy->min=sleep_freq_lp;
@@ -819,48 +779,50 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 		return NOTIFY_OK;
 	}
 
-	if (test_bit(CORE_BOOST, &b->cpu_state) && (policy->cpu == b->cpu)) {
-		b->cpu = 8;
-		policy->min = policy->max;
-		return NOTIFY_OK;
-	}
-
-	/* Boost CPU to max frequency for max boost */
-	if (test_bit(CLUSTER1_BOOST, &b->cpu_state) && (policy->cpu < 4)) {
-		policy->min = get_max_boost_freq(policy);
-		return NOTIFY_OK;
-	}
-	if (test_bit(CLUSTER2_BOOST, &b->cpu_state)) {
-		if ((policy->cpu > 3) && (policy->cpu < 7))
-			policy->min = get_max_boost_freq(policy);
-		if ((policy->cpu  == 7) && boost_gold)
-			policy->min = get_max_boost_freq(policy);
-		return NOTIFY_OK;
-	}
-
-	if (test_bit(INPUT_BOOST, &b->cpu_state) || test_bit(FLEX_BOOST, &b->cpu_state)) {
-		if (test_bit(INPUT_BOOST, &b->cpu_state)) {
-			if (policy->cpu < 4)
-				policy->min = get_input_boost_freq(policy);
-			if ((policy->cpu > 3) && (policy->cpu < 7))
-				policy->min = get_input_boost_freq(policy);
-			if ((policy->cpu  == 7) && boost_gold)
-				policy->min = get_input_boost_freq(policy);
+	if (!strcmp(policy->governor->name, "smurfutil")) {
+		if (test_bit(CORE_BOOST, &b->cpu_state) && (policy->cpu == b->cpu)) {
+			b->cpu = 8;
+			policy->min = policy->max;
 			return NOTIFY_OK;
 		}
-		if (test_bit(FLEX_BOOST, &b->cpu_state)) {
-			if (policy->cpu < 4)
-				policy->min = get_flex_boost_freq(policy);
-			if ((policy->cpu > 3) && (policy->cpu < 7))
-				policy->min = get_flex_boost_freq(policy);
-			if ((policy->cpu  == 7) && boost_gold)
-				policy->min = get_flex_boost_freq(policy);
+
+		/* Boost CPU to max frequency for max boost */
+		if (test_bit(CLUSTER1_BOOST, &b->cpu_state) && (policy->cpu < 4)) {
+			policy->min = get_max_boost_freq(policy);
 			return NOTIFY_OK;
 		}
-	}
+		if (test_bit(CLUSTER2_BOOST, &b->cpu_state)) {
+			if ((policy->cpu > 3) && (policy->cpu < 7))
+				policy->min = get_max_boost_freq(policy);
+			if ((policy->cpu  == 7) && boost_gold)
+				policy->min = get_max_boost_freq(policy);
+			return NOTIFY_OK;
+		}
 
-	policy->min = get_min_freq(b, policy->cpu);
-	return NOTIFY_OK;
+		if (test_bit(INPUT_BOOST, &b->cpu_state) || test_bit(FLEX_BOOST, &b->cpu_state)) {
+			if (test_bit(INPUT_BOOST, &b->cpu_state)) {
+				if (policy->cpu < 4)
+					policy->min = get_input_boost_freq(policy);
+				if ((policy->cpu > 3) && (policy->cpu < 7))
+					policy->min = get_input_boost_freq(policy);
+				if ((policy->cpu  == 7) && boost_gold)
+					policy->min = get_input_boost_freq(policy);
+				return NOTIFY_OK;
+			}
+			if (test_bit(FLEX_BOOST, &b->cpu_state)) {
+				if (policy->cpu < 4)
+					policy->min = get_flex_boost_freq(policy);
+				if ((policy->cpu > 3) && (policy->cpu < 7))
+					policy->min = get_flex_boost_freq(policy);
+				if ((policy->cpu  == 7) && boost_gold)
+					policy->min = get_flex_boost_freq(policy);
+				return NOTIFY_OK;
+			}
+		}
+
+		policy->min = get_min_freq(policy);
+		return NOTIFY_OK;
+	}
 }
 
 #ifdef CONFIG_DRM_MSM
@@ -878,8 +840,9 @@ static int msm_drm_notifier_cb(struct notifier_block *nb,
 	/* Boost when the screen turns on and unboost when it turns off */
 	if (*blank == MSM_DRM_BLANK_UNBLANK_CUST) {	
 		cpu_input_boost_kick_cluster1_wake(1000);
-		cpu_input_boost_kick_cluster2_wake(1000);	
+		cpu_input_boost_kick_cluster2_wake(1000);
 		set_bit(SCREEN_ON, &b->cpu_state);
+		update_online_cpu_policy();
 	} else if (*blank == MSM_DRM_BLANK_POWERDOWN_CUST) {
 		if (test_bit(SCREEN_ON, &b->cpu_state)) {
 			clear_bit(SCREEN_ON, &b->cpu_state);
@@ -1036,6 +999,7 @@ static int __init cpu_input_boost_init(void)
 	struct task_struct *boost_thread_gpu;
 	struct task_struct *boost_thread_stune;
 	struct boost_drv *b = &boost_drv_g;
+	gov_cpu_state = &boost_drv_g;
 	int ret;
 	
 	b->cpu_state = 0;

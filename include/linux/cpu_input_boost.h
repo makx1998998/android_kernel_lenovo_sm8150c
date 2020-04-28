@@ -6,20 +6,87 @@
 #define _CPU_INPUT_BOOST_H_
 
 #ifdef CONFIG_CPU_INPUT_BOOST
+enum {
+	SCREEN_ON,
+	INPUT_BOOST,
+	FLEX_BOOST,
+	CLUSTER1_BOOST,
+	CLUSTER2_BOOST,
+	CORE_BOOST,
+	CLUSTER1_WAKE_BOOST,
+	CLUSTER2_WAKE_BOOST,
+	INPUT_STUNE_BOOST,
+	MAX_STUNE_BOOST,
+	FLEX_STUNE_BOOST,
+	UFS_BOOST,
+	GPU_INPUT_BOOST,
+	GPU_FLEX_BOOST,
+};
+
+struct boost_drv {
+	struct workqueue_struct *wq_i;
+	struct workqueue_struct *wq_f;
+	struct workqueue_struct *wq_cl1;
+	struct workqueue_struct *wq_cl2;
+	struct workqueue_struct *wq_istu;
+	struct workqueue_struct *wq_mstu;
+	struct workqueue_struct *wq_ufs;
+	struct workqueue_struct *wq_fstu;
+	struct workqueue_struct *wq_gpu;
+	struct workqueue_struct *wq_gpu_flex;
+	struct workqueue_struct *wq_core;
+	struct delayed_work input_unboost;
+	struct delayed_work flex_unboost;
+	struct delayed_work gpu_flex_unboost;
+	struct delayed_work core_unboost;
+	struct delayed_work ufs_unboost;
+	struct delayed_work cluster1_unboost;
+	struct delayed_work cluster2_unboost;
+	struct delayed_work input_stune_unboost;
+	struct delayed_work max_stune_unboost;
+	struct delayed_work flex_stune_unboost;
+	struct delayed_work gpu_unboost;
+	struct notifier_block cpu_notif;
+#ifdef CONFIG_DRM_MSM
+	struct notifier_block msm_drm_notif;
+#else
+	struct notifier_block fb_notif;
+#endif
+	struct kgsl_device *gpu_device;
+	struct kgsl_pwrctrl *gpu_pwr;
+	wait_queue_head_t cpu_boost_waitq;
+	wait_queue_head_t gpu_boost_waitq;
+	wait_queue_head_t stune_boost_waitq;
+	unsigned long cpu_state;
+	unsigned long stune_state;
+	unsigned long gpu_state;
+	unsigned int cpu;
+};
+
+extern bool boost_gold;
+extern struct boost_drv *gov_cpu_state;
 extern unsigned int base_stune_boost;
 extern unsigned int default_level_stune_boost;
+extern unsigned int sleep_freq_lp;
+extern unsigned int sleep_freq_hp;
+extern unsigned int sleep_freq_gold;
 void cpu_input_boost_kick_ufs(unsigned int duration_ms);
-void cpu_input_boost_kick_flex(void);
+void cpu_input_boost_kick_flex(unsigned int duration_ms);
 void cpu_input_boost_kick_core(unsigned int duration_ms, unsigned int cpu);
 void cpu_input_boost_kick_cluster1(unsigned int duration_ms);
 void cpu_input_boost_kick_cluster2(unsigned int duration_ms);
 void cpu_input_boost_kick_cluster1_wake(unsigned int duration_ms);
 void cpu_input_boost_kick_cluster2_wake(unsigned int duration_ms);
+void gpu_boost_flex(unsigned int duration_ms);
+unsigned int get_input_boost_freq(struct cpufreq_policy *policy);
+unsigned int get_max_boost_freq(struct cpufreq_policy *policy);
+unsigned int get_flex_boost_freq(struct cpufreq_policy *policy);
+unsigned int get_min_freq(struct cpufreq_policy *policy);
 #else
 void cpu_input_boost_kick_ufs(unsigned int duration_ms)
 {
 }
-static inline void cpu_input_boost_kick_flex(void)
+void cpu_input_boost_kick_flex(unsigned int duration_ms)
 {
 }
 void cpu_input_boost_kick_core(unsigned int duration_ms, unsigned int cpu)
@@ -35,6 +102,9 @@ void cpu_input_boost_kick_cluster1_wake(unsigned int duration_ms)
 {
 }
 void cpu_input_boost_kick_cluster2_wake(unsigned int duration_ms)
+{
+}
+void gpu_boost_flex(unsigned int duration_ms)
 {
 }
 #endif
