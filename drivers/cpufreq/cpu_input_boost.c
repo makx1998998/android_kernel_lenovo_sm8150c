@@ -17,6 +17,7 @@
 #include <linux/kthread.h>
 #include <linux/slab.h>
 #include <linux/moduleparam.h>
+#include <linux/cpu_input_boost.h>
 #include "../gpu/msm/kgsl.h"
 #include "../gpu/msm/kgsl_pwrscale.h"
 #include "../gpu/msm/kgsl_device.h"
@@ -53,13 +54,13 @@ static bool little_only __read_mostly = false;
 static bool boost_gold __read_mostly = true;
 static bool gpu_oc __read_mostly = false;
 
-static short base_stune_boost __read_mostly = 20;
+short base_stune_boost __read_mostly = 20;
+unsigned int default_level_stune_boost __read_mostly = 5;
 static short input_stune_boost_offset __read_mostly = CONFIG_INPUT_BOOST_STUNE_OFFSET;
 static short max_stune_boost_offset __read_mostly = CONFIG_MAX_BOOST_STUNE_OFFSET;
 static short flex_stune_boost_offset __read_mostly = CONFIG_FLEX_BOOST_STUNE_OFFSET;
 static unsigned int stune_boost_extender_ms __read_mostly = CONFIG_STUNE_BOOST_EXTENDER_MS;
 static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE_BOOST_EXTENDER_MS;
-static unsigned int default_level_stune_boost __read_mostly = 5;
 static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
 static unsigned int gpu_prev_freq=257;
@@ -759,14 +760,11 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 	if (test_bit(INPUT_BOOST, &b->cpu_state) || test_bit(FLEX_BOOST, &b->cpu_state)) {
 		if (test_bit(INPUT_BOOST, &b->cpu_state)) {
 			if (policy->cpu < 4)
-				if (get_input_boost_freq(policy) > policy->min)
-					policy->min = get_input_boost_freq(policy);
+				policy->min = get_input_boost_freq(policy);
 			if ((policy->cpu > 3) && (policy->cpu < 7))
-				if (get_input_boost_freq(policy) > policy->min)
-					policy->min = get_input_boost_freq(policy);
+				policy->min = get_input_boost_freq(policy);
 			if ((policy->cpu  == 7) && boost_gold)
-				if (get_input_boost_freq(policy) > policy->min)
-					policy->min = get_input_boost_freq(policy);
+				policy->min = get_input_boost_freq(policy);
 			return NOTIFY_OK;
 		}
 		if (test_bit(FLEX_BOOST, &b->cpu_state)) {
