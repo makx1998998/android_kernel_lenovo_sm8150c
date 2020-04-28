@@ -7368,8 +7368,8 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 				 * - for !boosted tasks: the most energy
 				 * efficient CPU (i.e. smallest capacity_orig)
 				 */
-				if (boosted && max_cap_orig_cpu != -1 &&
-					best_idle_cpu == max_cap_orig_cpu)
+				if (boosted && mid_cap_orig_cpu != -1 &&
+					best_idle_cpu == mid_cap_orig_cpu)
 					break;
 				if (idle_cpu(i)) {
 					if (boosted &&
@@ -7573,8 +7573,8 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 				 * For boosted task, stop searching when an idle
 				 * cpu is found in mid cluster.
 				 */
-				if ((max_cap_orig_cpu != -1 &&
-					best_idle_cpu >= max_cap_orig_cpu) ||
+				if ((mid_cap_orig_cpu != -1 &&
+					best_idle_cpu >= mid_cap_orig_cpu) ||
 					!next_group_higher_cap)
 					break;
 			} else {
