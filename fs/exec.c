@@ -1694,6 +1694,8 @@ static int exec_binprm(struct linux_binprm *bprm)
 		ptrace_event(PTRACE_EVENT_EXEC, old_vpid);
 		proc_exec_connector(current);
 	}
+	if (strcmp(current->comm, "surfaceflinger") == 0)
+		current->is_surfaceflinger = true;
 
 	return ret;
 }

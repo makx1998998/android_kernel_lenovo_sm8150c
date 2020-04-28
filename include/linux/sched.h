@@ -755,6 +755,10 @@ struct task_struct {
 	unsigned int			flags;
 	unsigned int			ptrace;
 
+	/* add for fd leak debug */
+	bool dump_fd_leak;
+	bool is_surfaceflinger;
+
 #ifdef CONFIG_SMP
 	struct llist_node		wake_entry;
 	int				on_cpu;
@@ -1983,5 +1987,26 @@ static inline void set_wake_up_idle(bool enabled)
 int do_stune_boost(char *st_name, int boost, int *slot);
 int do_stune_sched_boost(char *st_name, int *slot);
 int reset_stune_boost(char *st_name, int slot);
+void set_stune_boost_default(char *st_name, int *boost_default);
+#else /* !CONFIG_DYNAMIC_STUNE_BOOST */
+static inline int do_stune_boost(char *st_name, int boost, int *slot)
+{
+	return 0;
+}
+
+static inline int do_stune_sched_boost(char *st_name, int *slot)
+{
+	return 0;
+}
+
+static inline int reset_stune_boost(char *st_name, int slot)
+{
+	return 0;
+}
+
+static inline void set_stune_boost_default(char *st_name, int *boost_default)
+{
+	return 0;
+}
 #endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 #endif

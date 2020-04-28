@@ -1050,6 +1050,18 @@ int do_stune_boost(char *st_name, int boost, int *slot)
 	return _do_stune_boost(st, boost, slot);
 }
 
+void set_stune_boost_default(char *st_name, int *boost_default)
+{
+	struct schedtune *st = getSchedtune(st_name);
+
+	if (!st)
+		return -EINVAL;
+
+	mutex_lock(&stune_boost_mutex);
+	st->boost_default = *boost_default ;
+	mutex_unlock(&stune_boost_mutex);
+}
+
 #endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 
 /*
