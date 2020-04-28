@@ -57,7 +57,7 @@ static short max_stune_boost_offset __read_mostly = CONFIG_MAX_BOOST_STUNE_OFFSE
 static short flex_stune_boost_offset __read_mostly = CONFIG_FLEX_BOOST_STUNE_OFFSET;
 static unsigned int stune_boost_extender_ms __read_mostly = CONFIG_STUNE_BOOST_EXTENDER_MS;
 static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE_BOOST_EXTENDER_MS;
-static unsigned int default_level_stune_boost __read_mostly = 15;
+static unsigned int default_level_stune_boost __read_mostly = 1;
 static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
 module_param(dynamic_stune_boost, short, 0644);
