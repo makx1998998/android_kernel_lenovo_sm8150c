@@ -14,6 +14,7 @@
 #include "walt.h"
 #include <linux/of.h>
 #include <linux/sched/core_ctl.h>
+#include <linux/cpu_input_boost.h>
 #include <trace/events/sched.h>
 
 /*
@@ -214,6 +215,11 @@ static void sched_boost_disable_all(void)
 
 static void _sched_set_boost(int type)
 {
+	if (type > 0)
+		set_stune_boost("top-app", base_stune_boost);
+	else
+		set_stune_boost("top-app", default_level_stune_boost);
+
 	if (type == 0)
 		sched_boost_disable_all();
 	else if (type > 0)
@@ -278,7 +284,9 @@ int sched_boost_handler(struct ctl_table *table, int write,
 	if (ret || !write)
 		goto done;
 
-	if (!verify_boost_params(*data))
+	if (verify_boost_params(*data))
+		_sched_set_boost(*data);
+	else
 		ret = -EINVAL;
 
 done:
