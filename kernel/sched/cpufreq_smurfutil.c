@@ -551,7 +551,7 @@ static void smugov_update_shared(struct update_util_data *hook, u64 time,
 			/* clear cache when it's bypassed */
 			sg_policy->cached_raw_freq = 0;
 		} else {
-			next_f = sugov_next_freq_shared(sg_cpu, time);
+			next_f = smugov_next_freq_shared(sg_cpu, time);
 		}
 
 		smugov_update_commit(sg_policy, time, next_f);

@@ -2081,7 +2081,7 @@ static inline unsigned long cpu_util_cum(int cpu, int delta)
 	unsigned long capacity = capacity_orig_of(cpu);
 
 #ifdef CONFIG_SCHED_WALT
-	if (unlikely!walt_disabled && sysctl_sched_use_walt_cpu_util)
+	if (unlikely(!walt_disabled && sysctl_sched_use_walt_cpu_util))
 		util = cpu_rq(cpu)->cum_window_demand_scaled;
 #endif
 	delta += util;
@@ -2105,7 +2105,7 @@ cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
 	unsigned long capacity = capacity_orig_of(cpu);
 	int boost;
 
-	if (unlikely(walt_disabled || !sysctl_sched_use_walt_cpu_util))
+	if (likely(walt_disabled || !sysctl_sched_use_walt_cpu_util))
 		return cpu_util(cpu);
 
 	boost = per_cpu(sched_load_boost, cpu);
