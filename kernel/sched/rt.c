@@ -2310,7 +2310,7 @@ static void pull_rt_task(struct rq *this_rq)
 		return;
 	}
 #endif
-	if (task->is_surfaceflinger && tutil > 90) {
+	if (task->is_surfaceflinger && tutil > 85) {
 		cpu_input_boost_kick_core(1000, task->cpu);
 		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 1000);
 		devfreq_boost_ddr_kick_max(DEVFREQ_MSM_DDRBW, 1000);
