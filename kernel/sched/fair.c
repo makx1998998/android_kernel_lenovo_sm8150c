@@ -9540,7 +9540,7 @@ static void update_cpu_capacity(struct sched_domain *sd, int cpu)
 	capacity = min(capacity, thermal_cap(cpu));
 	cpu_rq(cpu)->cpu_capacity_orig = capacity;
 
-	capacity *= scale_rt_capacity(cpu);
+	capacity *= scale_rt_capacity(sd, cpu);
 	capacity >>= SCHED_CAPACITY_SHIFT;
 
 	if (!capacity)
