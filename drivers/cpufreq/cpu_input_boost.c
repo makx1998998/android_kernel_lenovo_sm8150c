@@ -50,7 +50,7 @@ static bool little_only __read_mostly = false;
 static bool boost_gold __read_mostly = true;
 static bool gpu_oc __read_mostly = false;
 
-static short dynamic_stune_boost __read_mostly = 20;
+static short base_stune_boost __read_mostly = 20;
 static short input_stune_boost_offset __read_mostly = CONFIG_INPUT_BOOST_STUNE_OFFSET;
 static short max_stune_boost_offset __read_mostly = CONFIG_MAX_BOOST_STUNE_OFFSET;
 static short flex_stune_boost_offset __read_mostly = CONFIG_FLEX_BOOST_STUNE_OFFSET;
@@ -59,7 +59,7 @@ static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE
 static unsigned int default_level_stune_boost __read_mostly = 5;
 static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
-module_param(dynamic_stune_boost, short, 0644);
+module_param(base_stune_boost, short, 0644);
 module_param(input_stune_boost_offset, short, 0644);
 module_param(max_stune_boost_offset, short, 0644);
 module_param(flex_stune_boost_offset, short, 0644);
@@ -233,17 +233,17 @@ static void update_stune_boost(struct boost_drv *b) {
 	}
 	
 	if (test_bit(FLEX_STUNE_BOOST, &b->stune_state)) {
-		stune_boost_level = dynamic_stune_boost+flex_stune_boost_offset;
+		stune_boost_level = base_stune_boost+flex_stune_boost_offset;
 		boost = true;
 	}
 
 	if (test_bit(INPUT_STUNE_BOOST, &b->stune_state)) {
-		stune_boost_level = dynamic_stune_boost+input_stune_boost_offset;
+		stune_boost_level = base_stune_boost+input_stune_boost_offset;
 		boost = true;
 	}
 
 	if (test_bit(MAX_STUNE_BOOST, &b->stune_state)) {
-		stune_boost_level = dynamic_stune_boost+max_stune_boost_offset;
+		stune_boost_level = base_stune_boost+max_stune_boost_offset;
 		boost = true;
 	}
 	
@@ -457,7 +457,7 @@ static void __cpu_input_boost_kick_flex(struct boost_drv *b)
 			msecs_to_jiffies(flex_boost_duration))) {
 		set_bit(FLEX_BOOST, &b->state);
 		wake_up(&b->cpu_boost_waitq);
-		if (dynamic_stune_boost+flex_stune_boost_offset > 0)
+		if (base_stune_boost+flex_stune_boost_offset > 0)
 			if (!mod_delayed_work(b->wq_fstu, &b->flex_stune_unboost,
 					msecs_to_jiffies(flex_boost_duration))) {
 				set_bit(FLEX_STUNE_BOOST, &b->stune_state);
@@ -544,7 +544,7 @@ static void max_stune_unboost_worker(struct work_struct *work)
 static void flex_stune_unboost_worker(struct work_struct *work)
 {
 	struct boost_drv *b = container_of(to_delayed_work(work),
-					   typeof(*b), input_stune_unboost);
+					   typeof(*b), flex_stune_unboost);
 
 	clear_bit(FLEX_STUNE_BOOST, &b->stune_state);
 	wake_up(&b->stune_boost_waitq);
