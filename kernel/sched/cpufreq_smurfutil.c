@@ -251,8 +251,9 @@ static unsigned int get_next_freq(struct smugov_policy *sg_policy,
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
 	unsigned int silver_max_freq, gold_max_freq;
-	unsigned int min_freq;
+	unsigned int boost_freq;
 	unsigned long load = 100 * util / max;
+	bool apply_boost = false;
 
 	if(load < tunables->target_load1){
 		freq = (freq + (freq >> tunables->bit_shift1)) * util / max;
@@ -266,132 +267,207 @@ static unsigned int get_next_freq(struct smugov_policy *sg_policy,
 	}
 
 	if (gov_cpu_state != NULL) {
-		if (test_bit(CORE_BOOST, &gov_cpu_state->cpu_state) && (policy->cpu == gov_cpu_state->cpu)) {
-			gov_cpu_state->cpu = 8;
-			freq =  get_max_boost_freq(policy);
-			return freq;
+		apply_boost=false;
+		if (!(0x01 & gov_cpu_state->cpu_state)) {
+			if ((0x40 & gov_cpu_state->cpu_state) && (policy->cpu < 4)) {
+				if (!tunables->load_based_boost) {
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load2) {
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load1) {
+					boost_freq = get_input_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				}
+			}
+
+			if (0x80 & gov_cpu_state->cpu_state) {
+				if ((policy->cpu > 3) && (policy->cpu < 7)) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_max_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load2) {
+						boost_freq = get_max_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					}
+				}
+				if ((policy->cpu  == 7) && boost_gold) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_max_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load2) {
+						boost_freq = get_max_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					}
+				}
+			}
+			if (policy->cpu < 4) {
+				if (freq > sg_policy->tunables->silver_suspend_max_freq) {
+					boost_freq = sg_policy->tunables->silver_suspend_max_freq;
+					apply_boost = true;
+					goto sleep;
+				}
+			}
+			if (policy->cpu > 3) {
+				if (freq > sg_policy->tunables->gold_suspend_max_freq) {
+					boost_freq = sg_policy->tunables->gold_suspend_max_freq;
+					apply_boost = true;
+					goto sleep;
+				}
+			}
 		}
 
-		/* Boost CPU to max frequency for max boost */
-		if (test_bit(CLUSTER1_BOOST, &gov_cpu_state->cpu_state) && (policy->cpu < 4)) {
+		if ((0x08 & gov_cpu_state->cpu_state) && (policy->cpu < 4)) {
 			if (!tunables->load_based_boost) {
-				freq = get_max_boost_freq(policy);
-				return freq;
-			}
-			if (load >= tunables->target_load2) {
-				freq = get_max_boost_freq(policy);
-				return freq;
-			}
-			if (load >= tunables->target_load1) {
-				freq = get_input_boost_freq(policy);
-				return freq;;
+				boost_freq = get_max_boost_freq(policy);
+				apply_boost = true;
+				goto boost;
+			} else if (load >= tunables->target_load2) {
+				boost_freq = get_max_boost_freq(policy);
+				apply_boost = true;
+				goto boost;
+			} else if (load >= tunables->target_load1) {
+				boost_freq = get_input_boost_freq(policy);
+				apply_boost = true;
+				goto boost;
 			}
 		}
-		if (test_bit(CLUSTER2_BOOST, &gov_cpu_state->cpu_state)) {
+
+		if (0x10 & gov_cpu_state->cpu_state) {
 			if ((policy->cpu > 3) && (policy->cpu < 7)) {
 				if (!tunables->load_based_boost) {
-					freq = get_max_boost_freq(policy);
-					return freq;
-				}
-				if (load >= tunables->target_load2) {
-					freq = get_max_boost_freq(policy);
-					return freq;
-				}
-				if (load >= tunables->target_load1) {
-					freq = get_input_boost_freq(policy);
-					return freq;
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load2) {
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load1) {
+					boost_freq = get_input_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
 				}
 			}
 			if ((policy->cpu  == 7) && boost_gold) {
 				if (!tunables->load_based_boost) {
-					freq = get_max_boost_freq(policy);
-					return freq;
-				}
-				if (load >= tunables->target_load2) {
-					freq = get_max_boost_freq(policy);
-					return freq;
-				}
-				if (load >= tunables->target_load1) {
-					freq = get_input_boost_freq(policy);
-					return freq;
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load2) {
+					boost_freq = get_max_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
+				} else if (load >= tunables->target_load1) {
+					boost_freq = get_input_boost_freq(policy);
+					apply_boost = true;
+					goto boost;
 				}
 			}
 		}
 
-		if (test_bit(INPUT_BOOST, &gov_cpu_state->cpu_state) || test_bit(FLEX_BOOST, &gov_cpu_state->cpu_state)) {
-			if (test_bit(INPUT_BOOST, &gov_cpu_state->cpu_state)) {
-				if (policy->cpu < 4)
-					if (freq < get_input_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
+		if ((0x20 & gov_cpu_state->cpu_state) && (policy->cpu == gov_cpu_state->cpu)) {
+			gov_cpu_state->cpu = 8;
+			boost_freq =  get_max_boost_freq(policy);
+			apply_boost = true;
+			goto boost;
+		}
+
+		if ((0x02 & gov_cpu_state->cpu_state) || (0x04 & gov_cpu_state->cpu_state)) {
+			if (0x02 & gov_cpu_state->cpu_state) {
+				if (policy->cpu < 4) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
-				if ((policy->cpu > 3) && (policy->cpu < 7))
-					if (freq < get_input_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
+				}
+				if ((policy->cpu > 3) && (policy->cpu < 7)) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
-				if ((policy->cpu  == 7) && boost_gold)
-					if (freq < get_input_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_input_boost_freq(policy);
-							return freq;
-						}
+				}
+				if ((policy->cpu  == 7) && boost_gold) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_input_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
+				}
 			}
-			if (test_bit(FLEX_BOOST, &gov_cpu_state->cpu_state)) {
-				if (policy->cpu < 4)
-					if (freq < get_flex_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
+			if (0x04 & gov_cpu_state->cpu_state) {
+				if (policy->cpu < 4) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
-				if ((policy->cpu > 3) && (policy->cpu < 7))
-					if (freq < get_flex_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
+				}
+				if ((policy->cpu > 3) && (policy->cpu < 7)) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
-				if ((policy->cpu  == 7) && boost_gold)
-					if (freq < get_flex_boost_freq(policy)) {
-						if (!tunables->load_based_boost) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
-						if (load >= tunables->target_load1) {
-							freq = get_flex_boost_freq(policy);
-							return freq;
-						}
+				}
+				if ((policy->cpu  == 7) && boost_gold) {
+					if (!tunables->load_based_boost) {
+						boost_freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
+					} else if (load >= tunables->target_load1) {
+						boost_freq = get_flex_boost_freq(policy);
+						apply_boost = true;
+						goto boost;
 					}
+				}
 			}
 		}
 	}
 
+boost:
+	if (apply_boost)
+		if (freq < boost_freq)
+sleep:
+			freq = boost_freq;
 
 	trace_smugov_next_freq(policy->cpu, util, max, freq);
 
@@ -1133,7 +1209,6 @@ static void smugov_tunables_save(struct cpufreq_policy *policy,
 	cached->gold_suspend_max_freq = tunables->gold_suspend_max_freq;
 	cached->turbo_mode = tunables->turbo_mode;
 	cached->load_based_boost = tunables->load_based_boost;
-	
 }
 
 static void smugov_tunables_free(struct smugov_tunables *tunables)
