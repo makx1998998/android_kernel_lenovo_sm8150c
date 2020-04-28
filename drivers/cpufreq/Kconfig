@@ -368,7 +368,6 @@ config INPUT_BOOST_FREQ_GOLD
 
 config INPUT_BOOST_STUNE_OFFSET
 	int "Foreground app schedtune input boost offset"
-	depends on DYNAMIC_STUNE_BOOST
 	default "25"
 	help
 	  Input boost level for the EAS SchedTune boosting system. This
@@ -434,7 +433,6 @@ config FLEX_BOOST_DURATION_MS
 
 config FLEX_BOOST_STUNE_OFFSET
 	int "Foreground app schedtune max boost offset"
-	depends on DYNAMIC_STUNE_BOOST
 	default "-20"
 	help
 	  Maximum boost level for the EAS SchedTune boosting system. This
@@ -446,7 +444,6 @@ config FLEX_BOOST_STUNE_OFFSET
 
 config MAX_BOOST_STUNE_OFFSET
 	int "Foreground app schedtune max boost offset"
-	depends on DYNAMIC_STUNE_BOOST
 	default "50"
 	help
 	  Maximum boost level for the EAS SchedTune boosting system. This
@@ -458,21 +455,18 @@ config MAX_BOOST_STUNE_OFFSET
 
 config  GPU_BOOST_FREQ
 	int "Boost GPU to given frequency"
-	depends on DYNAMIC_STUNE_BOOST
 	default '345'
 	help
 	  Boosts GPU to given frequency
 
 config  GPU_MIN_FREQ
 	int "MIN GPU frequency"
-	depends on DYNAMIC_STUNE_BOOST
 	default '257'
 	help
 	  MIN GPU frequency
 
 config INPUT_THREAD_PRIORITY
 	int "Input hread priority"
-	depends on DYNAMIC_STUNE_BOOST
 	default "25"
 
 config MAX_BOOST_FREQ_LP
@@ -495,21 +489,18 @@ config MAX_BOOST_FREQ_LP
 
 config STUNE_BOOST_EXTENDER_MS
 	int "Foreground app schedtune max extend duration"
-	depends on DYNAMIC_STUNE_BOOST
 	default '250'
 	help
 	  Extends the stune boost duration to a given timespan
 
 config MAX_STUNE_BOOST_EXTENDER_MS
 	int "Foreground app schedtune max extend duration"
-	depends on DYNAMIC_STUNE_BOOST
 	default '500'
 	help
 	  Extends the stune boost duration to a given timespan
 
 config GPU_BOOST_EXTENDER_MS
 	int "Boost GPU for 3000 ms"
-	depends on DYNAMIC_STUNE_BOOST
 	default '500'
 	help
 	  Boosts GPU to given frequency for 3000 ms
