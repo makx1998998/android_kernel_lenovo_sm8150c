@@ -202,7 +202,7 @@ int qcom_cc_register_sleep_clk(struct device *dev)
 EXPORT_SYMBOL_GPL(qcom_cc_register_sleep_clk);
 
 /* Drop 'protected-clocks' from the list of clocks to register */
-static void qcom_cc_drop_protected(struct device *dev, struct qcom_cc *cc)
+static void __maybe_unused qcom_cc_drop_protected(struct device *dev, struct qcom_cc *cc)
 {
 	struct device_node *np = dev->of_node;
 	struct property *prop;
