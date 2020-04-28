@@ -764,7 +764,7 @@ void set_stune_boost(char *st_name, int boost)
 	struct schedtune *st = getSchedtune(st_name);
 
 	if (!st)
-		return -EINVAL;
+		return;
 
 	boost_write(&st->css, NULL, boost);
 }
