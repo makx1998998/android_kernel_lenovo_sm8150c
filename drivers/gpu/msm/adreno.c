@@ -905,9 +905,11 @@ static void adreno_of_get_ca_aware_properties(struct adreno_device *adreno_dev,
 			return;
 		}
 
+		adreno_dev->speed_bin = 1;
 		for_each_child_of_node(node, child) {
 			if (of_property_read_u32(child, "qcom,speed-bin", &bin))
 				continue;
+
 
 			if (bin == adreno_dev->speed_bin) {
 				adreno_of_get_ca_target_pwrlevel(adreno_dev,
@@ -1024,6 +1026,7 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 	if (node == NULL)
 		return adreno_of_get_legacy_pwrlevels(adreno_dev, parent);
 
+	adreno_dev->speed_bin = 1;
 	for_each_child_of_node(node, child) {
 
 		if (of_property_read_u32(child, "qcom,speed-bin", &bin))
@@ -2740,6 +2743,7 @@ static int adreno_getproperty(struct kgsl_device *device,
 				break;
 			}
 
+			adreno_dev->speed_bin = 1;
 			speed_bin = adreno_dev->speed_bin;
 
 			if (copy_to_user(value, &speed_bin,
@@ -2760,6 +2764,7 @@ static int adreno_getproperty(struct kgsl_device *device,
 			break;
 		}
 
+		adreno_dev->gaming_bin = 1;
 		gaming_bin = adreno_dev->gaming_bin ? 1 : 0;
 
 		if (copy_to_user(value, &gaming_bin,
