@@ -1,16 +1,16 @@
 --- kernel/sched/fair.c
 +++ kernel/sched/fair.c
-@@ -7863,6 +7865,13 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
+@@ -7929,13 +7927,6 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
  		fbt_env.fastpath = SYNC_WAKEUP;
  		goto out;
  	}
-+
-+	if (use_sync_boost) {
-+		sync_boost = sync && cpu >= start_cpu(p, true, 0);
-+	} else {
-+		sync_boost = false;
-+	}
-+
+-
+-	if (use_sync_boost) {
+-		sync_boost = sync && cpu >= start_cpu(p, true, 0);
+-	} else {
+-		sync_boost = false;
+-	}
+-
  	/* prepopulate energy diff environment */
  	eenv = get_eenv(p, prev_cpu);
  	if (eenv->max_cpu_count < 2)
