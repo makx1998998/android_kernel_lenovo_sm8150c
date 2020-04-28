@@ -1,75 +1,19 @@
 --- kernel/sched/fair.c
 +++ kernel/sched/fair.c
-@@ -3503,10 +3505,18 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
- 	if (!sched_feat(UTIL_EST))
- 		return;
+@@ -6969,13 +6947,14 @@ static inline int __select_idle_sibling(struct task_struct *p, int prev, int tar
+ 	struct sched_domain *sd;
+ 	int i, recent_used_cpu;
  
--	/* Update root cfs_rq's estimated utilization */
--	ue.enqueued  = cfs_rq->avg.util_est.enqueued;
--	ue.enqueued -= min_t(unsigned int, ue.enqueued,
--			     (_task_util_est(p) | UTIL_AVG_UNCHANGED));
-+	/*
-+	 * Update root cfs_rq's estimated utilization
-+	 *
-+	 * If *p is the last task then the root cfs_rq's estimated utilization
-+	 * of a CPU is 0 by definition.
-+	 */
-+	ue.enqueued = 0;
-+	if (cfs_rq->nr_running) {
-+		ue.enqueued  = cfs_rq->avg.util_est.enqueued;
-+		ue.enqueued -= min_t(unsigned int, ue.enqueued,
-+				     (_task_util_est(p) | UTIL_AVG_UNCHANGED));
-+	}
- 	WRITE_ONCE(cfs_rq->avg.util_est.enqueued, ue.enqueued);
+-	if ((idle_cpu(target) && !cpu_isolated(target)) || sched_idle_cpu(target))
++	if (idle_cpu(target) && !cpu_isolated(target))
+ 		return target;
  
- 	trace_sched_util_est_cpu(cpu_of(rq_of(cfs_rq)), cfs_rq);
-@@ -7910,23 +7962,23 @@ static int find_energy_efficient_cpu(struct sched_domain *sd,
- 	int placement_boost = task_boost_policy(p);
- 	u64 start_t = 0;
- 	int next_cpu = -1, backup_cpu = -1;
--
- 	int boosted = (schedtune_task_boost(p) > 0 || per_task_boost(p) > 0);
- 
- 	fbt_env.fastpath = 0;
--	fbt_env.need_idle = 0;
- 
- 	if (trace_sched_task_util_enabled())
- 		start_t = sched_clock();
- 
- 	if (need_idle)
- 		sync = 0;
-+
- 	if (sysctl_sched_sync_hint_enable && sync &&
- 				bias_to_waker_cpu(p, cpu, rtg_target)) {
- 		target_cpu = cpu;
- 		fbt_env.fastpath = SYNC_WAKEUP;
- 		goto out;
- 	}
-+
- 	/* prepopulate energy diff environment */
- 	eenv = get_eenv(p, prev_cpu);
- 	if (eenv->max_cpu_count < 2)
-@@ -9535,8 +9591,12 @@ void init_max_cpu_capacity(struct max_cpu_capacity *mcc)
- 
- static void update_cpu_capacity(struct sched_domain *sd, int cpu)
- {
--	unsigned long capacity = scale_rt_capacity(sd, cpu);
-+	unsigned long capacity = arch_scale_cpu_capacity(sd, cpu);
- 	struct sched_group *sdg = sd->groups;
-+	struct max_cpu_capacity *mcc;
-+	unsigned long max_capacity;
-+	int max_cap_cpu;
-+	unsigned long flags;
- 
- 	capacity *= arch_scale_max_freq_capacity(sd, cpu);
- 	capacity >>= SCHED_CAPACITY_SHIFT;
-@@ -11229,8 +11310,7 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
+ 	/*
+ 	 * If the previous cpu is cache affine and idle, don't be stupid.
  	 */
- 	rq_unpin_lock(this_rq, rf);
+-	if ((prev != target && cpus_share_cache(prev, target) && idle_cpu(prev) && !cpu_isolated(prev)) || sched_idle_cpu(prev))
++	if (prev != target && cpus_share_cache(prev, target) &&
++				idle_cpu(prev) && !cpu_isolated(prev))
+ 		return prev;
  
--	if (!energy_aware() && !force_lb &&
--	   (this_rq->avg_idle < sysctl_sched_migration_cost ||
-+	if (!force_lb && (this_rq->avg_idle < sysctl_sched_migration_cost ||
- 	    !READ_ONCE(this_rq->rd->overload))) {
- 		rcu_read_lock();
- 		sd = rcu_dereference_check_sched_domain(this_rq->sd);
+ 	/* Check a recently used CPU as a potential idle candidate */
