@@ -39,6 +39,9 @@ static unsigned int max_boost_freq_gold __read_mostly = CONFIG_MAX_BOOST_FREQ_GO
 static unsigned int remove_input_boost_freq_lp __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_LP;
 static unsigned int remove_input_boost_freq_perf __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_PERF;
 static unsigned int remove_input_boost_freq_gold __read_mostly = CONFIG_REMOVE_INPUT_BOOST_FREQ_GOLD;
+static unsigned int sleep_freq_lp __read_mostly = 576000;
+static unsigned int sleep_freq_hp __read_mostly = 710400;
+static unsigned int sleep_freq_gold __read_mostly = 825600;
 static unsigned int gpu_boost_freq __read_mostly = CONFIG_GPU_BOOST_FREQ;
 static unsigned int gpu_min_freq __read_mostly = CONFIG_GPU_MIN_FREQ;
 static unsigned int gpu_sleep_freq __read_mostly = 180; 
@@ -87,6 +90,9 @@ module_param(gpu_boost_extender_ms, uint, 0644);
 module_param(little_only, bool, 0644);
 module_param(boost_gold, bool, 0644);
 module_param(gpu_oc, bool, 0644);
+module_param(sleep_freq_lp, uint, 0644);
+module_param(sleep_freq_hp, uint, 0644);
+module_param(sleep_freq_gold, uint, 0644);
 
 enum {
 	SCREEN_ON,
@@ -599,6 +605,20 @@ static void gpu_flex_unboost_worker(struct work_struct *work)
 	wake_up(&b->gpu_boost_waitq);
 }
 
+static void cancel_all_wq (struct boost_drv *b)
+{
+	cancel_delayed_work(&b->input_unboost);
+	cancel_delayed_work(&b->core_unboost);
+	cancel_delayed_work(&b->cluster1_unboost);
+	cancel_delayed_work(&b->cluster2_unboost);
+	cancel_delayed_work(&b->flex_unboost);
+	cancel_delayed_work(&b->input_stune_unboost);
+	cancel_delayed_work(&b->max_stune_unboost);
+	cancel_delayed_work(&b->flex_stune_unboost);
+	cancel_delayed_work(&b->gpu_unboost);
+	cancel_delayed_work(&b->gpu_flex_unboost);
+}
+
 static int cpu_boost_thread(void *data)
 {
 	static struct sched_param sched_max_rt_prio;
@@ -699,13 +719,13 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 	/* Unboost when the screen is off */
 	if (!test_bit(SCREEN_ON, &b->cpu_state)) {
 		if (policy->cpu < 4) {
-			policy->min=300000;
+			policy->min=sleep_freq_lp;
 		}
 		if ((policy->cpu > 3) && (policy->cpu < 7)) {
-			policy->min=710400;
+			policy->min=sleep_freq_hp;
 		}
 		if (policy->cpu==7) {
-			policy->min=825600;
+			policy->min=sleep_freq_gold;
 		}
 		return NOTIFY_OK;
 	}
@@ -772,24 +792,27 @@ static int msm_drm_notifier_cb(struct notifier_block *nb,
 		cpu_input_boost_kick_cluster2_wake(1000);	
 		set_bit(SCREEN_ON, &b->cpu_state);
 	} else if (*blank == MSM_DRM_BLANK_POWERDOWN_CUST) {
-		clear_bit(SCREEN_ON, &b->cpu_state);
-		wake_up(&b->cpu_boost_waitq);
-		clear_bit(INPUT_BOOST, &b->cpu_state);
-		clear_bit(FLEX_BOOST, &b->cpu_state);
-		clear_bit(CORE_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER1_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER2_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER2_WAKE_BOOST, &b->cpu_state);
-		clear_bit(INPUT_STUNE_BOOST, &b->stune_state);
-		clear_bit(MAX_STUNE_BOOST, &b->stune_state);
-		clear_bit(FLEX_STUNE_BOOST, &b->stune_state);
-		clear_bit(GPU_INPUT_BOOST, &b->gpu_state);
-		set_gpu_boost(b, gpu_sleep_freq);
-		set_stune_boost("top-app", default_level_stune_boost);
-		pr_info("Screen off, boosts turned off\n");
-		pr_info("Screen off, GPU frequency sleep\n");
-		pr_info("Screen off, CPU frequency sleep\n");
+		if (test_bit(SCREEN_ON, &b->cpu_state)) {
+			clear_bit(SCREEN_ON, &b->cpu_state);
+			clear_bit(INPUT_BOOST, &b->cpu_state);
+			clear_bit(FLEX_BOOST, &b->cpu_state);
+			clear_bit(CORE_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER1_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER2_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER2_WAKE_BOOST, &b->cpu_state);
+			clear_bit(INPUT_STUNE_BOOST, &b->stune_state);
+			clear_bit(MAX_STUNE_BOOST, &b->stune_state);
+			clear_bit(FLEX_STUNE_BOOST, &b->stune_state);
+			clear_bit(GPU_INPUT_BOOST, &b->gpu_state);
+			cancel_all_wq (b);
+			set_gpu_boost(b, gpu_sleep_freq);
+			set_stune_boost("top-app", default_level_stune_boost);
+			update_online_cpu_policy();
+			pr_info("Screen off, boosts turned off\n");
+			pr_info("Screen off, GPU frequency sleep\n");
+			pr_info("Screen off, CPU frequency sleep\n");
+		}
 	}
 	return NOTIFY_OK;
 }
@@ -810,24 +833,27 @@ static int fb_notifier_cb(struct notifier_block *nb, unsigned long action,
 		cpu_input_boost_kick_cluster2_wake(1000);	
 		set_bit(SCREEN_ON, &b->cpu_state);
 	} else {
-		clear_bit(SCREEN_ON, &b->cpu_state);
-		wake_up(&b->cpu_boost_waitq);
-		clear_bit(INPUT_BOOST, &b->cpu_state);
-		clear_bit(FLEX_BOOST, &b->cpu_state);
-		clear_bit(CORE_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER1_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER2_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state);
-		clear_bit(CLUSTER2_WAKE_BOOST, &b->cpu_state);
-		clear_bit(INPUT_STUNE_BOOST, &b->stune_state);
-		clear_bit(MAX_STUNE_BOOST, &b->stune_state);
-		clear_bit(FLEX_STUNE_BOOST, &b->stune_state);
-		clear_bit(GPU_INPUT_BOOST, &b->gpu_state);
-		set_gpu_boost(b, gpu_sleep_freq);
-		set_stune_boost("top-app", default_level_stune_boost);
-		pr_info("Screen off, boosts turned off\n");
-		pr_info("Screen off, GPU frequency sleep\n");
-		pr_info("Screen off, CPU frequency sleep\n");
+		if (test_bit(SCREEN_ON, &b->cpu_state)) {
+			clear_bit(SCREEN_ON, &b->cpu_state);
+			clear_bit(INPUT_BOOST, &b->cpu_state);
+			clear_bit(FLEX_BOOST, &b->cpu_state);
+			clear_bit(CORE_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER1_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER2_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER1_WAKE_BOOST, &b->cpu_state);
+			clear_bit(CLUSTER2_WAKE_BOOST, &b->cpu_state);
+			clear_bit(INPUT_STUNE_BOOST, &b->stune_state);
+			clear_bit(MAX_STUNE_BOOST, &b->stune_state);
+			clear_bit(FLEX_STUNE_BOOST, &b->stune_state);
+			clear_bit(GPU_INPUT_BOOST, &b->gpu_state);
+			cancel_all_wq (b);
+			set_gpu_boost(b, gpu_sleep_freq);
+			set_stune_boost("top-app", default_level_stune_boost);
+			update_online_cpu_policy();
+			pr_info("Screen off, boosts turned off\n");
+			pr_info("Screen off, GPU frequency sleep\n");
+			pr_info("Screen off, CPU frequency sleep\n");
+		}
 	}
 	return NOTIFY_OK;
 }
