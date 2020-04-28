@@ -1,0 +1,75 @@
+diff --git a/drivers/base/arch_topology.c b/drivers/base/arch_topology.c
+index dfc67d8ab7eb..84fc7a3f22a5 100644
+--- a/drivers/base/arch_topology.c
++++ b/drivers/base/arch_topology.c
+@@ -181,9 +181,9 @@ int detect_share_cap_flag(void)
+ 		if (!policy)
+ 			return 0;
+ 
+-		if (cpumask_equal(cpu_cpu_mask(cpu),
++		if (cpumask_equal(topology_sibling_cpumask(cpu),
+ 				  policy->related_cpus)) {
+-			share_cap_level = share_cap_die;
++			share_cap_level = share_cap_thread;
+ 			continue;
+ 		}
+ 
+@@ -193,9 +193,9 @@ int detect_share_cap_flag(void)
+ 			continue;
+ 		}
+ 
+-		if (cpumask_equal(topology_sibling_cpumask(cpu),
++		if (cpumask_equal(cpu_cpu_mask(cpu),
+ 				  policy->related_cpus)) {
+-			share_cap_level = share_cap_thread;
++			share_cap_level = share_cap_die;
+ 			continue;
+ 		}
+ 	}
+@@ -291,7 +291,7 @@ int topology_smt_flags(void)
+ 	if (asym_cpucap == asym_thread)
+ 		flags |= SD_ASYM_CPUCAPACITY;
+ 
+-	if (share_cap >= share_cap_thread)
++	if (share_cap == share_cap_thread)
+ 		flags |= SD_SHARE_CAP_STATES;
+ 
+ 	return flags;
+@@ -304,7 +304,7 @@ int topology_core_flags(void)
+ 	if (asym_cpucap == asym_core)
+ 		flags |= SD_ASYM_CPUCAPACITY;
+ 
+-	if (share_cap >= share_cap_core)
++	if (share_cap == share_cap_core)
+ 		flags |= SD_SHARE_CAP_STATES;
+ 
+ 	return flags;
+@@ -317,7 +317,7 @@ int topology_cpu_flags(void)
+ 	if (asym_cpucap == asym_die)
+ 		flags |= SD_ASYM_CPUCAPACITY;
+ 
+-	if (share_cap >= share_cap_die)
++	if (share_cap == share_cap_die)
+ 		flags |= SD_SHARE_CAP_STATES;
+ 
+ 	return flags;
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 2a95ecf3b796..0370237c36d8 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -6103,12 +6103,9 @@ static int compute_energy(struct energy_env *eenv)
+ 		 * when we took visit_cpus.
+ 		 */
+ 		sd = rcu_dereference(per_cpu(sd_scs, cpu));
+-		if (sd) {
+-			if (sd->parent)
+-				sg_shared_cap = sd->parent->groups;
+-			else /* single cluster system */
+-				sg_shared_cap = sd->groups;
+-		}
++		if (sd && sd->parent)
++			sg_shared_cap = sd->parent->groups;
++
+ 		for_each_domain(cpu, sd) {
+ 			sg = sd->groups;
+ 			/* Has this sched_domain already been visited? */
