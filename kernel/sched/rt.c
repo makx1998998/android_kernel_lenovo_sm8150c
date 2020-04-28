@@ -1784,9 +1784,20 @@ static int rt_energy_aware_wake_cpu(struct task_struct *task)
 	unsigned long tutil = task_util(task);
 	int best_cpu_idle_idx = INT_MAX;
 	int cpu_idle_idx = -1, start_cpu;
+#ifdef CONFIG_SCHED_WALT
 	bool boost_on_big = sched_boost() == FULL_THROTTLE_BOOST ?
 				  (sched_boost_policy() == SCHED_BOOST_ON_BIG) :
 				  false;
+#else
+	bool boost_on_big = false;
+#endif
+
+if (task->is_surfaceflinger && tutil > 90) {
+		cpu_input_boost_kick_core(1000, task->cpu);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 1000);
+		devfreq_boost_ddr_kick_max(DEVFREQ_MSM_DDRBW, 1000);
+		devfreq_boost_gpu_kick_max(DEVFREQ_MSM_GPUBW, 1000);	
+	}
 
 	rcu_read_lock();
 
