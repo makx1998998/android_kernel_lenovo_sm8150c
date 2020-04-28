@@ -58,6 +58,7 @@ static short flex_stune_boost_offset __read_mostly = CONFIG_FLEX_BOOST_STUNE_OFF
 static unsigned int stune_boost_extender_ms __read_mostly = CONFIG_STUNE_BOOST_EXTENDER_MS;
 static unsigned int max_stune_boost_extender_ms __read_mostly = CONFIG_MAX_STUNE_BOOST_EXTENDER_MS;
 static unsigned int default_level_stune_boost __read_mostly = 15;
+static unsigned int sleep_level_stune_boost __read_mostly = 1;
 
 module_param(dynamic_stune_boost, short, 0644);
 module_param(input_stune_boost_offset, short, 0644);
@@ -713,13 +714,13 @@ static int fb_notifier_cb(struct notifier_block *nb, unsigned long action,
 
 	/* Boost when the screen turns on and unboost when it turns off */
 	if (*blank == FB_BLANK_UNBLANK) {
-		clear_bit(GOTO_SLEEP, &b->state);
 		cpu_input_boost_kick_cluster1_wake(1000);
 		cpu_input_boost_kick_cluster2_wake(1000);	
 		set_bit(SCREEN_ON, &b->state);
 		update_gpu_boost(b, gpu_min_freq);
 	} else {
 		update_gpu_boost(b, gpu_sleep_freq);
+		set_stune_boost_default("top-app", &sleep_level_stune_boost);
 		clear_bit(SCREEN_ON, &b->state);
 		clear_bit(INPUT_BOOST, &b->state);
 		clear_bit(FLEX_BOOST, &b->state);
@@ -831,7 +832,7 @@ static int __init cpu_input_boost_init(void)
 	
 	b->state = 0;
 	b->stune_state=0;
-	set_stune_boost_default("top-app", &default_level_stune_boost);
+	set_stune_boost_default("top-app", &sleep_level_stune_boost);
 	
 	b->wq_i = alloc_workqueue("cpu_input_boost_wq_i", WQ_HIGHPRI, 0);
 	if (!b->wq_i) {
