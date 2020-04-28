@@ -757,6 +757,18 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 	}
 
 	if (test_bit(INPUT_BOOST, &b->cpu_state) || test_bit(FLEX_BOOST, &b->cpu_state)) {
+		if (test_bit(INPUT_BOOST, &b->cpu_state)) {
+			if (policy->cpu < 4)
+				if (get_input_boost_freq(policy) > policy->min)
+					policy->min = get_input_boost_freq(policy);
+			if ((policy->cpu > 3) && (policy->cpu < 7))
+				if (get_input_boost_freq(policy) > policy->min)
+					policy->min = get_input_boost_freq(policy);
+			if ((policy->cpu  == 7) && boost_gold)
+				if (get_input_boost_freq(policy) > policy->min)
+					policy->min = get_input_boost_freq(policy);
+			return NOTIFY_OK;
+		}
 		if (test_bit(FLEX_BOOST, &b->cpu_state)) {
 			if (policy->cpu < 4)
 				policy->min = get_flex_boost_freq(policy);
@@ -764,17 +776,8 @@ static int cpu_notifier_cb(struct notifier_block *nb, unsigned long action,
 				policy->min = get_flex_boost_freq(policy);
 			if ((policy->cpu  == 7) && boost_gold)
 				policy->min = get_flex_boost_freq(policy);
+			return NOTIFY_OK;
 		}
-
-		if (test_bit(INPUT_BOOST, &b->cpu_state)) {
-			if (policy->cpu < 4)
-				policy->min = get_input_boost_freq(policy);
-			if ((policy->cpu > 3) && (policy->cpu < 7))
-				policy->min = get_input_boost_freq(policy);
-			if ((policy->cpu  == 7) && boost_gold)
-				policy->min = get_input_boost_freq(policy);
-		}
-		return NOTIFY_OK;
 	}
 
 	policy->min = get_min_freq(b, policy->cpu);
