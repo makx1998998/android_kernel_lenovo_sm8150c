@@ -47,3 +47,4 @@ TRACE_EVENT(gpu_frequency,
 
 /* This part must be outside protection */
 #include <trace/define_trace.h>
+

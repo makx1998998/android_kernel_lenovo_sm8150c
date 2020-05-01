@@ -764,6 +764,7 @@ gov_attr(guard_band_mbps, 0U, 2000U);
 gov_attr(decay_rate, 0U, 100U);
 gov_attr(io_percent, 1U, 100U);
 gov_attr(bw_step, 50U, 1000U);
+gov_attr(sample_ms, 1U, 50U);
 gov_attr(up_scale, 0U, 500U);
 gov_attr(up_thres, 1U, 100U);
 gov_attr(down_thres, 0U, 90U);
